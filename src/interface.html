@@ -271,22 +271,18 @@
 <script>
   const state = __PARAMS__;
 
-  // ---- Scaling: design is 480x960; the window opens at 480*uiScale x
-  // 960*uiScale, and `zoom` shrinks the content to match. On load we also
-  // auto-fit to the screen, so a too-tall saved scale never hides CREATE. ----
-  const BASE_W = 480, BASE_H = 960;
+  // ---- Scaling: the extension already probed the screen and opened this
+  // WINDOW at 480*uiScale x 960*uiScale; zoom the content to match. A-/A+
+  // adjust the preference (persisted): smaller applies instantly, larger than
+  // the current window takes effect on the next open (a window can't grow).
+  const WINDOW_SCALE = state.uiScale || 1;
   const pctEl = document.getElementById("sizePct");
-  function applyScale(s) {
-    state.uiScale = Math.round(s * 100) / 100;
-    document.body.style.zoom = state.uiScale;
+  function applyScale(pref) {
+    state.uiScale = Math.round(pref * 100) / 100;
+    document.body.style.zoom = Math.min(state.uiScale, WINDOW_SCALE);
     pctEl.textContent = Math.round(state.uiScale * 100) + "%";
   }
-  const fit = Math.min(
-    1,
-    (screen.availHeight * 0.9) / BASE_H,
-    (screen.availWidth * 0.95) / BASE_W,
-  );
-  applyScale(Math.max(0.5, Math.min(state.uiScale || 1, fit)));
+  applyScale(WINDOW_SCALE);
   document.getElementById("sizeDown").addEventListener("click", () =>
     applyScale(Math.max(0.5, state.uiScale - 0.1)));
   document.getElementById("sizeUp").addEventListener("click", () =>

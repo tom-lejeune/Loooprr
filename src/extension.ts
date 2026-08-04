@@ -33,6 +33,53 @@ type Ctx = ExtensionContext<V>;
 
 const SETTINGS_FILE = "settings.json";
 
+/** Design size of the settings dialog; the real window is this times uiScale. */
+const DIALOG_W = 480;
+const DIALOG_H = 960;
+
+/**
+ * Tiny splash dialog that reports the screen's available size and closes
+ * itself immediately. The extension process cannot see the screen, so this
+ * probe is the only way to size the real dialog window to fit BEFORE opening
+ * it (the window frame cannot be resized from inside a dialog).
+ */
+const MEASURE_HTML = `<!DOCTYPE html><html><head><style>
+  body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;
+  background:#faf5ec;font-family:"Arial Black","Segoe UI",sans-serif;user-select:none}
+  div{font-size:20px;letter-spacing:.02em;color:#111}
+</style></head><body><div>LOOOPRR&nbsp;&#127922;</div><script>
+  function send(m){
+    if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.live){
+      window.webkit.messageHandlers.live.postMessage(m);
+    }else if(window.chrome&&window.chrome.webview){window.chrome.webview.postMessage(m);}
+  }
+  function report(){send({method:"close_and_send",params:[JSON.stringify(
+    {w:screen.availWidth,h:screen.availHeight})]});}
+  addEventListener("load",report);
+  addEventListener("click",report); // fallback if auto-close is blocked
+</script></body></html>`;
+
+/** Probe the screen and return the dialog scale that fits it (0.5..1). */
+async function measureFitScale(context: Ctx): Promise<number> {
+  try {
+    const probe = await context.ui.showModalDialog(
+      `data:text/html,${encodeURIComponent(MEASURE_HTML)}`,
+      220,
+      90,
+    );
+    const dims = JSON.parse(probe) as { w?: number; h?: number };
+    if (typeof dims.w === "number" && typeof dims.h === "number" && dims.w > 0 && dims.h > 0) {
+      return Math.max(
+        0.5,
+        Math.min(1, (dims.h * 0.9) / DIALOG_H, (dims.w * 0.95) / DIALOG_W),
+      );
+    }
+  } catch (e) {
+    console.warn("Loooprr: screen measure failed, using saved scale.", e);
+  }
+  return 1;
+}
+
 function storageDir(context: Ctx): string {
   return context.environment.storageDirectory ?? path.join(os.homedir(), ".loooprr");
 }
@@ -93,16 +140,21 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
     return;
   }
 
-  // Dialog: current saved settings as starting point. The window opens at the
-  // persisted scale; inside, the page auto-fits to the screen and offers A-/A+
-  // controls, and reports the (possibly adjusted) scale back so the next open
-  // gets a correctly sized window.
+  // Dialog: current saved settings as starting point. A quick probe dialog
+  // measures the screen first, so the real WINDOW opens at a size that fits
+  // (it cannot be resized afterwards); the page zooms its content to match.
+  // uiScale is the user's preference (A-/A+), capped by what fits.
   const current = await loadParams(context);
-  const html = interfaceHtml.replace("__PARAMS__", JSON.stringify(current));
+  const fitScale = await measureFitScale(context);
+  const scale = Math.max(0.5, Math.min(current.uiScale, fitScale));
+  const html = interfaceHtml.replace(
+    "__PARAMS__",
+    JSON.stringify({ ...current, uiScale: scale }),
+  );
   const result = await context.ui.showModalDialog(
     `data:text/html,${encodeURIComponent(html)}`,
-    Math.round(480 * current.uiScale),
-    Math.round(960 * current.uiScale),
+    Math.round(DIALOG_W * scale),
+    Math.round(DIALOG_H * scale),
   );
   const parsed = JSON.parse(result) as { cancelled?: boolean; uiScale?: number };
   if (parsed.cancelled) {
