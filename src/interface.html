@@ -33,8 +33,10 @@
   }
   header, main, footer { position: relative; z-index: 1; }
 
-  header { padding: 20px 22px 6px; display: flex; align-items: flex-start; }
+  header { padding: 20px 22px 6px; display: flex; align-items: flex-start; gap: 20px; }
   .headText { flex: 1; }
+  .headCtl { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .headRow { display: flex; align-items: stretch; gap: 10px; }
   h1 {
     font-family: "Arial Black", "Segoe UI", sans-serif;
     font-size: 26px; letter-spacing: 0.01em; line-height: 1;
@@ -149,18 +151,17 @@
   .fxPanel .seg { padding: 8px 0; font-size: 11px; }
   .fxPanel .seg.on { background: var(--acc, var(--yellow)); }
 
-  .seedRow { display: flex; align-items: stretch; gap: 12px; }
   .seedVal {
-    flex: 1; display: flex; align-items: center; justify-content: center;
+    width: 220px; display: flex; align-items: center; justify-content: center;
     background: #fff; border: 3px solid var(--ink); border-radius: 9px;
     box-shadow: 3px 3px 0 var(--ink);
-    padding: 6px; overflow: hidden; min-height: 64px;
+    padding: 3px 6px; overflow: hidden; min-height: 46px;
   }
   .dice {
     background: var(--yellow); border: 3px solid var(--ink); border-radius: 9px;
     box-shadow: 3px 3px 0 var(--ink);
-    font-size: 24px; line-height: 1; padding: 8px 18px; cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    font-size: 18px; line-height: 1; padding: 6px 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
   }
   .dice span.txt { font-size: 11px; font-weight: 900; letter-spacing: 0.08em; }
   .dice:hover { transform: translate(-1px, -1px); }
@@ -170,34 +171,24 @@
     100% { transform: rotate(360deg); }
   }
 
-  .favBar { display: flex; align-items: stretch; gap: 10px; }
-  .favSave {
-    background: var(--pink); color: #fff;
-    border: 3px solid var(--ink); border-radius: 9px;
-    box-shadow: 3px 3px 0 var(--ink);
-    font-size: 11px; font-weight: 900; letter-spacing: 0.05em;
-    padding: 8px 14px; cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-    flex: 0 0 auto;
-  }
-  .favSave .heart { font-size: 18px; }
-  .favSave:hover { transform: translate(-1px, -1px); }
   .favInfo {
-    flex: 1; display: flex; flex-direction: column; justify-content: center;
-    font-size: 10px; font-weight: 700; color: #888; overflow: hidden; padding: 0 4px;
+    font-size: 9px; font-weight: 700; color: #888; text-align: right;
+    letter-spacing: 0.04em; white-space: nowrap;
   }
   .favInfo b { color: var(--ink); }
-  .favBrowse {
-    background: #fff;
+  .favSave, .favBrowse {
     border: 3px solid var(--ink); border-radius: 9px;
     box-shadow: 3px 3px 0 var(--ink);
     font-size: 11px; font-weight: 900; letter-spacing: 0.05em;
-    padding: 8px 14px; cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    padding: 6px 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
     flex: 0 0 auto;
   }
-  .favBrowse .count { font-size: 16px; }
-  .favBrowse:hover { transform: translate(-1px, -1px); }
+  .favSave { background: var(--pink); color: #fff; }
+  .favSave .heart { font-size: 15px; }
+  .favBrowse { background: #fff; }
+  .favBrowse .count { font-size: 15px; }
+  .favSave:hover, .favBrowse:hover { transform: translate(-1px, -1px); }
 
   /* Favorites browser — a preset-list overlay like a synth's preset browser. */
   #favOverlay {
@@ -291,6 +282,15 @@
     <h1>LOOOPRR</h1>
     <span class="subtitle">CREATE RANDOM LOOP</span>
   </div>
+  <div class="headCtl">
+    <div class="headRow">
+      <div class="seedVal" id="seedVal" title="Seed — same shape = same loops"></div>
+      <div class="dice" id="newSeed"><span class="die">🎲</span><span class="txt">ROLL</span></div>
+      <div class="favSave" id="favSave" title="Save the current recipe (seed + all settings)"><span class="heart">♥</span><span>SAVE</span></div>
+      <div class="favBrowse" id="favBrowse" title="Browse saved favorites"><span class="count" id="favCount">0</span><span>BROWSE</span></div>
+    </div>
+    <div class="favInfo" id="favInfo">SEED = SAME SHAPE, SAME LOOPS · ♥ SAVES THE RECIPE</div>
+  </div>
 </header>
 <main>
 <div class="col">
@@ -332,19 +332,6 @@
 
   <div class="label"><span class="chip tri"></span>GROOVE &amp; SPACE</div>
   <div id="grooveList"></div>
-
-  <div class="label"><span class="chip round" style="background:var(--teal)"></span>SEED — SAME SHAPE = SAME LOOPS</div>
-  <div class="seedRow">
-    <div class="seedVal" id="seedVal"></div>
-    <div class="dice" id="newSeed"><span class="die">🎲</span><span class="txt">ROLL</span></div>
-  </div>
-
-  <div class="label"><span class="chip" style="background:var(--pink)"></span>FAVORITES — SAVED RECIPES (SEED + ALL SETTINGS)</div>
-  <div class="favBar">
-    <div class="favSave" id="favSave"><span class="heart">♥</span><span>SAVE</span></div>
-    <div class="favInfo" id="favInfo"></div>
-    <div class="favBrowse" id="favBrowse"><span class="count" id="favCount">0</span><span>BROWSE</span></div>
-  </div>
 </div>
 
 <div class="col">
@@ -380,7 +367,7 @@
   // ---- Scaling: the design is BASE_W x BASE_H; the content always zooms to
   // fill the ACTUAL window (the extension opened it as large as the screen
   // allows — the host window itself cannot be resized afterwards).
-  const BASE_W = 960, BASE_H = 760;
+  const BASE_W = 960, BASE_H = 720;
   function applyZoom() {
     document.body.style.zoom = Math.min(
       window.innerWidth / BASE_W,
