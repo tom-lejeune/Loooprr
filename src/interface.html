@@ -285,7 +285,7 @@
   <div class="headCtl">
     <div class="headRow">
       <div class="seedVal" id="seedVal" title="Seed — same shape = same loops"></div>
-      <div class="dice" id="newSeed"><span class="die">🎲</span><span class="txt">ROLL</span></div>
+      <div class="dice" id="newSeed" title="Randomize ALL settings + seed"><span class="die">🎲</span><span class="txt">RANDOMIZE</span></div>
       <div class="favSave" id="favSave" title="Save the current recipe (seed + all settings)"><span class="heart">♥</span><span>SAVE</span></div>
       <div class="favBrowse" id="favBrowse" title="Browse saved favorites"><span class="count" id="favCount">0</span><span>BROWSE</span></div>
     </div>
@@ -586,17 +586,44 @@
       `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${shapes}</svg>`;
   }
 
+  // ---- RANDOMIZE: reroll ALL sound-shaping settings, not just the seed.
+  // Variations and Color Clips are workflow choices and stay untouched.
+  function pickOne(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  /** Random 0..1, skewed low with pow > 1, floored so it's never inaudible. */
+  function rndAmt(pow, min) {
+    return Math.max(min, Math.round(Math.pow(Math.random(), pow) * 100) / 100);
+  }
+  function randomizeAll() {
+    state.sliceLength = pickOne(["1/4", "1/8", "1/16", "random"]);
+    state.loopBars = pickOne([1, 2, 4, 8]);
+    state.crossfade = pickOne(["off", "short", "medium", "long"]);
+    FX_DEFS.forEach((def) => {
+      const s = state[def.key];
+      s.on = Math.random() < (def.key === "dropout" ? 0.25 : 0.45);
+      s.chance = rndAmt(1.3, 0.05);
+      if (def.opts) s[def.opts.prop] = pickOne(def.opts.choices.map((c) => c[0]));
+    });
+    state.autopan.on = Math.random() < 0.4;
+    state.autopan.amount = rndAmt(1, 0.2);
+    state.swing.on = Math.random() < 0.4;
+    state.swing.amount = rndAmt(1.5, 0.15);
+    state.endfill.on = Math.random() < 0.5;
+    state.endfill.chance = rndAmt(1, 0.2);
+    state.seed = Math.floor(Math.random() * 4294967296);
+  }
   const dice = document.getElementById("newSeed");
   dice.addEventListener("click", () => {
     if (dice.classList.contains("rolling")) return;
     dice.classList.add("rolling");
-    const final = Math.floor(Math.random() * 4294967296);
-    // Flash random artworks while the die spins, then settle.
+    // Flash random artworks while the die spins, then land on the new recipe.
     const scramble = setInterval(() => drawSeed(Math.floor(Math.random() * 4294967296)), 60);
     setTimeout(() => {
       clearInterval(scramble);
-      state.seed = final;
-      drawSeed(final);
+      randomizeAll();
+      syncSegments();
+      refreshSliders();
+      drawSeed(state.seed);
+      favInfo.innerHTML = "🎲 EVERYTHING RANDOMIZED — ♥ SAVE IF YOU LOVE IT";
       dice.classList.remove("rolling");
     }, 450);
   });

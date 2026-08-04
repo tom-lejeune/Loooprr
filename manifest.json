@@ -2,6 +2,6 @@
     "name": "Loooprr",
     "author": "Tom",
     "entry": "dist/extension.js",
-    "version": "1.5.3",
+    "version": "1.6.0",
     "minimumApiVersion": "1.0.0"
 }
