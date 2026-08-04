@@ -389,10 +389,6 @@
   }
   window.addEventListener("resize", applyZoom);
   applyZoom();
-  document.getElementById("sizeDown").addEventListener("click", () =>
-    applyScale(Math.max(0.5, state.uiScale - 0.1)));
-  document.getElementById("sizeUp").addEventListener("click", () =>
-    applyScale(Math.min(1, state.uiScale + 0.1)));
 
   function doSendMessage(message) {
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.live) {
