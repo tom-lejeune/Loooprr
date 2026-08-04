@@ -44,9 +44,12 @@ type Ctx = ExtensionContext<V>;
 
 const SETTINGS_FILE = "settings.json";
 
-/** Design size of the settings dialog; the real window is this times uiScale. */
+/**
+ * Approximate design size of the dialog, used to shape the window; the page
+ * measures its own real content height and zooms to fit exactly.
+ */
 const DIALOG_W = 960;
-const DIALOG_H = 720;
+const DIALOG_H = 840;
 
 /**
  * Tiny splash dialog that reports the screen's available size and closes

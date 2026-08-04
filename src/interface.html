@@ -364,18 +364,26 @@
 <script>
   const state = __PARAMS__;
 
-  // ---- Scaling: the design is BASE_W x BASE_H; the content always zooms to
-  // fill the ACTUAL window (the extension opened it as large as the screen
-  // allows — the host window itself cannot be resized afterwards).
-  const BASE_W = 960, BASE_H = 720;
+  // ---- Scaling: the content zooms to fill the ACTUAL window (the extension
+  // opened it as large as the screen allows; the frame cannot be resized).
+  // The natural content height is MEASURED once the UI is fully built —
+  // guessing it caused the bottom of the dialog to fall off the window.
+  const BASE_W = 960;
+  let naturalH = 0;
   function applyZoom() {
+    if (!naturalH) {
+      const h = document.querySelector("header");
+      const m = document.querySelector("main");
+      const f = document.querySelector("footer");
+      naturalH = h.offsetHeight + m.scrollHeight + f.offsetHeight + 4;
+    }
     document.body.style.zoom = Math.min(
       window.innerWidth / BASE_W,
-      window.innerHeight / BASE_H,
+      window.innerHeight / naturalH,
     );
   }
   window.addEventListener("resize", applyZoom);
-  applyZoom();
+  // applyZoom() is called at the END of this script, after all rows exist.
 
   function doSendMessage(message) {
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.live) {
@@ -852,6 +860,7 @@
 
   syncSegments();
   drawSeed(state.seed);
+  applyZoom(); // measure the real content height now that every row exists
 </script>
 </body>
 </html>
