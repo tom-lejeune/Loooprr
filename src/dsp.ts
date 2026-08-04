@@ -71,9 +71,22 @@ export interface CollageOptions extends CollageParams {
   variationIndex: number;
 }
 
-type SliceFx =
+export type SliceFx =
   | "retrigger" | "sweep" | "tapestop" | "scratch" | "gater"
   | "repitch" | "bitcrush" | "filter" | "tonaldelay" | "dropout";
+
+/** What happened in one output slot — for per-chop clip placement/coloring. */
+export interface SlotInfo {
+  /** Slot region in output frames (nominal, without the crossfade tail). */
+  startFrame: number;
+  endFrame: number;
+  fx: SliceFx | "endfill" | null;
+  reversed: boolean;
+}
+
+export interface CollageResult extends AudioBuffers {
+  slots: SlotInfo[];
+}
 
 /** Quadratic chance curve: keeps low percentages genuinely rare per loop. */
 const sq = (p: number) => p * p;
@@ -86,7 +99,7 @@ const sq = (p: number) => p * p;
 export function buildCollageLoop(
   sources: AudioBuffers[],
   opts: CollageOptions,
-): AudioBuffers {
+): CollageResult {
   const usable = sources.filter((s) => s.channels.length > 0 && s.channels[0]!.length > 1);
   if (!usable.length) throw new Error("no source audio");
   if (!(opts.sourceBeats > 0)) throw new Error("sourceBeats must be positive");
@@ -100,6 +113,7 @@ export function buildCollageLoop(
   const xfMs = CROSSFADE_MS[opts.crossfade];
   const requestedXf = Math.round((xfMs / 1000) * OUTPUT_SAMPLE_RATE);
 
+  const slots: SlotInfo[] = [];
   let posBeats = 0;
   let slotIdx = 0;
   while (posBeats < loopBeats - 1e-9) {
@@ -147,6 +161,7 @@ export function buildCollageLoop(
     const fx: SliceFx | null = pool.length ? pool[Math.floor(rng() * pool.length)]! : null;
     const reversed = opts.reverse.on && rng() < sq(opts.reverse.chance);
 
+    slots.push({ startFrame, endFrame, fx, reversed });
     if (fx === "dropout") {
       // Intentional hole: the previous slice's crossfade tail decays into it.
       posBeats += sliceBeats; slotIdx++; continue;
@@ -314,7 +329,17 @@ export function buildCollageLoop(
 
   // ---- End fill: replace the loop's final beat with an accelerating roll. ----
   if (opts.endfill.on && rng() < opts.endfill.chance) {
-    applyEndFill(out, usable, rng, opts, secPerBeat, loopBeats, totalFrames);
+    const fillBeats = Math.min(1, loopBeats / 4);
+    const fillFrames = Math.round(fillBeats * secPerBeat * OUTPUT_SAMPLE_RATE);
+    const fillStart = totalFrames - fillFrames;
+    applyEndFill(out, usable, rng, opts, secPerBeat, fillStart, fillFrames, totalFrames);
+    // The fill replaces whatever slots it overlaps.
+    for (let i = slots.length - 1; i >= 0; i--) {
+      const s = slots[i]!;
+      if (s.startFrame >= fillStart) slots.splice(i, 1);
+      else if (s.endFrame > fillStart) s.endFrame = fillStart;
+    }
+    slots.push({ startFrame: fillStart, endFrame: totalFrames, fx: "endfill", reversed: false });
   }
 
   // Peak-normalize to -1 dBFS.
@@ -332,7 +357,7 @@ export function buildCollageLoop(
     }
   }
 
-  return { channels: out, sampleRate: OUTPUT_SAMPLE_RATE };
+  return { channels: out, sampleRate: OUTPUT_SAMPLE_RATE, slots };
 }
 
 /** Snare-roll style fill: subdivisions double toward the loop end. */
@@ -342,13 +367,10 @@ function applyEndFill(
   rng: () => number,
   opts: CollageOptions,
   secPerBeat: number,
-  loopBeats: number,
+  fillStart: number,
+  fillFrames: number,
   totalFrames: number,
 ): void {
-  const fillBeats = Math.min(1, loopBeats / 4);
-  const fillFrames = Math.round(fillBeats * secPerBeat * OUTPUT_SAMPLE_RATE);
-  const fillStart = totalFrames - fillFrames;
-
   // One grid slice (a 1/16 of the source) is the roll's ammunition.
   const src = usable[Math.floor(rng() * usable.length)]!;
   const ratio = src.sampleRate / OUTPUT_SAMPLE_RATE;

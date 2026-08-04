@@ -23,7 +23,12 @@ import {
   DataModelObject,
 } from "@ableton-extensions/sdk";
 
-import { buildCollageLoop, type AudioBuffers } from "./dsp.js";
+import {
+  buildCollageLoop,
+  OUTPUT_SAMPLE_RATE,
+  type AudioBuffers,
+  type SlotInfo,
+} from "./dsp.js";
 import { encodeWav24 } from "./wav.js";
 import {
   DEFAULT_PARAMS,
@@ -147,6 +152,44 @@ async function saveParams(context: Ctx, params: CollageParams): Promise<void> {
 
 const FAVORITES_FILE = "favorites.json";
 
+/**
+ * Clip colors per effect for COLOR CLIPS mode — the extension's accent
+ * palette (Live may snap them to its own nearest palette entries).
+ */
+const FX_CLIP_COLORS: Record<string, number> = {
+  plain: 0xb8b8b0,
+  reverse: 0x29a8ff,
+  retrigger: 0xff4d8d,
+  sweep: 0x9b5de5,
+  tapestop: 0x00c6ae,
+  scratch: 0xff8c1a,
+  gater: 0xffd600,
+  repitch: 0x5ac8ff,
+  bitcrush: 0xd97706,
+  filter: 0x00a08b,
+  tonaldelay: 0xc77dff,
+  endfill: 0xff3355,
+};
+const FX_CLIP_TAGS: Record<string, string> = {
+  plain: "·",
+  reverse: "REV",
+  retrigger: "RTG",
+  sweep: "SWP",
+  tapestop: "STP",
+  scratch: "SCR",
+  gater: "GTE",
+  repitch: "PIT",
+  bitcrush: "CRU",
+  filter: "FLT",
+  tonaldelay: "DLY",
+  endfill: "FILL",
+};
+
+function slotFxKey(slot: SlotInfo): string {
+  if (slot.fx) return slot.fx;
+  return slot.reversed ? "reverse" : "plain";
+}
+
 async function loadFavorites(context: Ctx): Promise<Favorite[]> {
   const raw = await readStored(context, FAVORITES_FILE);
   const favorites = sanitizeFavorites(raw);
@@ -255,7 +298,7 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
       const tempo = song.tempo;
       const tempDir = context.environment.tempDirectory ?? os.tmpdir();
       const stamp = Date.now();
-      const importedPaths: string[] = [];
+      const variants: { importedPath: string; slots: SlotInfo[] }[] = [];
       for (let v = 0; v < params.variations; v++) {
         if (signal.aborted) return;
         await update(
@@ -270,37 +313,79 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
         });
         const outPath = path.join(tempDir, `loooprr-${stamp}-v${v + 1}.wav`);
         await fs.writeFile(outPath, encodeWav24(loop));
-        importedPaths.push(await context.resources.importIntoProject(outPath));
+        variants.push({
+          importedPath: await context.resources.importIntoProject(outPath),
+          slots: loop.slots,
+        });
       }
       if (signal.aborted) return;
 
       // Phase 3: place the variations back-to-back on a new audio track.
       await update("Creating clips…", 90);
       const loopBeats = params.loopBars * 4;
+      const framesPerBeat = OUTPUT_SAMPLE_RATE * (60 / tempo);
       const outTrack = await song.createAudioTrack();
-      const clips = await Promise.all(
-        context.withinTransaction(() =>
-          importedPaths.map((filePath, v) =>
-            outTrack.createAudioClip({
-              filePath,
-              startTime: selStart + v * loopBeats,
-              isWarped: true,
-              duration: loopBeats,
-              loopSettings: {
-                looping: true,
-                startMarker: 0,
-                endMarker: loopBeats,
-                loopStart: 0,
-                loopEnd: loopBeats,
-              },
-            }),
+
+      if (params.colorclips.on) {
+        // One clip per chop, all referencing the variation's WAV via markers,
+        // colored by the effect that hit the chop. Dropouts stay real gaps.
+        for (let v = 0; v < variants.length; v++) {
+          if (signal.aborted) return;
+          const { importedPath, slots } = variants[v]!;
+          const base = selStart + v * loopBeats;
+          const clipSlots = slots.filter((s) => s.fx !== "dropout");
+          const clips = await Promise.all(
+            context.withinTransaction(() =>
+              clipSlots.map((s) => {
+                const startBeat = s.startFrame / framesPerBeat;
+                const endBeat = s.endFrame / framesPerBeat;
+                return outTrack.createAudioClip({
+                  filePath: importedPath,
+                  startTime: base + startBeat,
+                  duration: endBeat - startBeat,
+                  isWarped: true,
+                  loopSettings: {
+                    looping: false,
+                    startMarker: startBeat,
+                    endMarker: endBeat,
+                    loopStart: startBeat,
+                    loopEnd: endBeat,
+                  },
+                });
+              }),
+            ),
+          );
+          clips.forEach((clip, i) => {
+            const key = slotFxKey(clipSlots[i]!);
+            clip.color = FX_CLIP_COLORS[key]!;
+            clip.name = FX_CLIP_TAGS[key]!;
+          });
+        }
+      } else {
+        const clips = await Promise.all(
+          context.withinTransaction(() =>
+            variants.map(({ importedPath }, v) =>
+              outTrack.createAudioClip({
+                filePath: importedPath,
+                startTime: selStart + v * loopBeats,
+                isWarped: true,
+                duration: loopBeats,
+                loopSettings: {
+                  looping: true,
+                  startMarker: 0,
+                  endMarker: loopBeats,
+                  loopStart: 0,
+                  loopEnd: loopBeats,
+                },
+              }),
+            ),
           ),
-        ),
-      );
+        );
+        clips.forEach((clip, v) => {
+          clip.name = `Loooprr v${v + 1} (seed ${params.seed})`;
+        });
+      }
       outTrack.name = "Loooprr";
-      clips.forEach((clip, v) => {
-        clip.name = `Loooprr v${v + 1} (seed ${params.seed})`;
-      });
 
       await update("Done", 100);
     },

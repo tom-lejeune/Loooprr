@@ -37,6 +37,7 @@ function allFxOff() {
     autopan: { on: false, amount: 0 },
     swing: { on: false, amount: 0 },
     endfill: { on: false, chance: 0 },
+    colorclips: { on: false },
   };
 }
 
@@ -57,6 +58,7 @@ function allFxMax() {
     autopan: { on: true, amount: 1 },
     swing: { on: true, amount: 0.6 },
     endfill: { on: true, chance: 1 },
+    colorclips: { on: true },
   };
 }
 
@@ -264,6 +266,34 @@ test("end fill at 100% replaces the final beat deterministically", () => {
   assert.ok(sum > 0, "fill region is silent");
 });
 
+test("slots metadata covers the loop and reports fx per chop", () => {
+  // FX off: slots tile the loop contiguously, all plain.
+  const plain = buildCollageLoop([noiseSource(2)], { ...BASE, ...allFxOff(), loopBars: 1 });
+  assert.ok(plain.slots.length > 0);
+  assert.equal(plain.slots[0]!.startFrame, 0);
+  assert.equal(plain.slots[plain.slots.length - 1]!.endFrame, plain.channels[0]!.length);
+  for (let i = 1; i < plain.slots.length; i++) {
+    assert.equal(plain.slots[i]!.startFrame, plain.slots[i - 1]!.endFrame);
+  }
+  assert.ok(plain.slots.every((s) => s.fx === null && !s.reversed));
+
+  // Gater at 100%: every slot reports the gater.
+  const gated = buildCollageLoop([noiseSource(2)], {
+    ...BASE, ...allFxOff(), gater: { on: true, chance: 1, gates: 8 },
+  });
+  assert.ok(gated.slots.every((s) => s.fx === "gater"));
+
+  // End fill at 100%: the final slot is the fill, ending exactly at the loop end.
+  const filled = buildCollageLoop([noiseSource(2)], {
+    ...BASE, ...allFxOff(), endfill: { on: true, chance: 1 }, loopBars: 1,
+  });
+  const last = filled.slots[filled.slots.length - 1]!;
+  assert.equal(last.fx, "endfill");
+  assert.equal(last.endFrame, filled.channels[0]!.length);
+  // Slots never overlap the fill region.
+  assert.ok(filled.slots.slice(0, -1).every((s) => s.endFrame <= last.startFrame));
+});
+
 test("encodeWav24 writes a valid 24-bit PCM header", () => {
   const out = buildCollageLoop([noiseSource(2)], BASE);
   const bytes = encodeWav24(out);
@@ -339,6 +369,8 @@ test("sanitizeParams clamps and defaults bad nested input", () => {
   // Pre-1.4.3 migration: an amount without a toggle means on when > 0.
   assert.equal(sanitizeParams({ swing: { amount: 0.4 } }).swing.on, true);
   assert.equal(sanitizeParams({ swing: { amount: 0 } }).swing.on, false);
+  assert.equal(sanitizeParams({}).colorclips.on, false);
+  assert.equal(sanitizeParams({ colorclips: { on: true } }).colorclips.on, true);
   const round = sanitizeParams(p);
   assert.deepEqual(round, p);
 });

@@ -37,6 +37,9 @@ audio is never touched.
   - **Swing** — odd slots drag behind the grid
   - **End fill** — the loop's final beat becomes an accelerating snare-roll
     fill (half the time also rising in pitch)
+  - **Color clips** — instead of one clip per variation, place one clip per
+    chop (all referencing the same WAV via markers), colored by the effect
+    that hit it: see your loop's structure right in the Arrangement
 - **Crossfades** — equal-power slice joins (off/short/medium/long) that wrap
   around the loop end, so every loop is seamless.
 - **Visual seed** — the seed is drawn as generative Memphis shapes; same

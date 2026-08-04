@@ -54,6 +54,8 @@ export interface CollageParams {
   autopan: { on: boolean; amount: number };
   swing: { on: boolean; amount: number };
   endfill: { on: boolean; chance: number };
+  /** Place one clip per chop, colored by the effect that hit it. */
+  colorclips: { on: boolean };
 }
 
 export const DEFAULT_PARAMS: CollageParams = {
@@ -77,6 +79,7 @@ export const DEFAULT_PARAMS: CollageParams = {
   autopan: { on: false, amount: 0.6 },
   swing: { on: false, amount: 0.3 },
   endfill: { on: false, chance: 0.5 },
+  colorclips: { on: false },
 };
 
 const SLICE_LENGTHS: readonly SliceLength[] = ["1/4", "1/8", "1/16", "random"];
@@ -211,6 +214,9 @@ export function sanitizeParams(raw: unknown): CollageParams {
     endfill: {
       on: bool(endfillRaw.on, d.endfill.on),
       chance: clamp01(endfillRaw.chance, d.endfill.chance),
+    },
+    colorclips: {
+      on: bool(((r.colorclips ?? {}) as Record<string, unknown>).on, d.colorclips.on),
     },
   };
 }

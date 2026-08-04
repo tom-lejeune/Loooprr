@@ -139,6 +139,8 @@
     font-size: 11px; font-weight: 900; letter-spacing: 0.05em;
   }
   .fxRow:not(.on) .fxName, .fxRow:not(.on) input, .fxRow:not(.on) .pct { opacity: 0.4; }
+  .fxHint { flex: 1; font-size: 9px; font-weight: 700; color: #999; letter-spacing: 0.04em; }
+  .fxRow:not(.on) .fxHint { opacity: 0.4; }
   .fxChev {
     width: 24px; height: 24px; flex: 0 0 auto; display: flex;
     align-items: center; justify-content: center;
@@ -470,6 +472,8 @@
     { key: "autopan", label: "AUTO-PAN", acc: "var(--teal)", prop: "amount" },
     { key: "swing",   label: "SWING",    acc: "var(--pink)", prop: "amount" },
     { key: "endfill", label: "END FILL", acc: "var(--yellow)", prop: "chance" },
+    { key: "colorclips", label: "COLOR CLIPS", acc: "var(--purple)", toggleOnly: true,
+      hint: "ONE CLIP PER CHOP, COLORED BY ITS FX" },
   ];
   const fxSyncFns = [];
   function buildFxRow(def, container) {
@@ -481,8 +485,9 @@
     row.innerHTML =
       (def.noToggle ? '<div style="width:40px;flex:0 0 auto"></div>' : '<div class="fxTog"></div>') +
       '<div class="fxName">' + def.label + '</div>' +
-      '<input type="range" min="0" max="100" step="1">' +
-      '<div class="pct"></div>' +
+      (def.toggleOnly
+        ? '<div class="fxHint">' + (def.hint || "") + '</div>'
+        : '<input type="range" min="0" max="100" step="1"><div class="pct"></div>') +
       (def.opts ? '<div class="fxChev">▾</div>' : '');
     container.appendChild(row);
 
@@ -512,16 +517,18 @@
 
     const slider = row.querySelector("input");
     const pct = row.querySelector(".pct");
-    slider.addEventListener("input", () => {
-      st()[prop] = slider.value / 100;
-      if (!def.noToggle && !st().on && slider.value > 0) st().on = true; // moving = intent
-      sync();
-    });
+    if (slider) {
+      slider.addEventListener("input", () => {
+        st()[prop] = slider.value / 100;
+        if (!def.noToggle && !st().on && slider.value > 0) st().on = true; // moving = intent
+        sync();
+      });
+    }
     if (!def.noToggle) {
       row.querySelector(".fxTog").addEventListener("click", () => {
         st().on = !st().on;
         // Switching on at 0% would be inaudible — jump to "a little bit".
-        if (st().on && !(st()[prop] > 0)) st()[prop] = 0.3;
+        if (!def.toggleOnly && st().on && !(st()[prop] > 0)) st()[prop] = 0.3;
         sync();
       });
     }
@@ -529,8 +536,10 @@
     function sync() {
       const s = st();
       row.classList.toggle("on", def.noToggle ? s[prop] > 0 : !!s.on);
-      slider.value = Math.round(s[prop] * 100);
-      pct.textContent = slider.value + "%";
+      if (slider) {
+        slider.value = Math.round(s[prop] * 100);
+        pct.textContent = slider.value + "%";
+      }
       if (panel) {
         panel.querySelectorAll(".seg").forEach((seg) =>
           seg.classList.toggle("on", seg._val === s[def.opts.prop]));
