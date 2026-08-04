@@ -86,51 +86,77 @@ async function measureFitScale(context: Ctx): Promise<number> {
   return 1;
 }
 
-function storageDir(context: Ctx): string {
-  return context.environment.storageDirectory ?? path.join(os.homedir(), ".loooprr");
+/**
+ * Storage lives at USER level (~/.loooprr), not in Live's storageDirectory:
+ * that directory turned out to be per-Live-set, so favorites saved in one set
+ * were invisible in the next. The per-set dir is kept as a read-fallback to
+ * migrate old saves, and as a write-fallback should the home dir be blocked.
+ */
+function globalDir(): string {
+  return path.join(os.homedir(), ".loooprr");
+}
+
+function legacyDir(context: Ctx): string | undefined {
+  return context.environment.storageDirectory;
+}
+
+/** Read+parse JSON from the global dir, falling back to the legacy per-set dir. */
+async function readStored(context: Ctx, file: string): Promise<unknown> {
+  try {
+    return JSON.parse(await fs.readFile(path.join(globalDir(), file), "utf8"));
+  } catch {
+    const legacy = legacyDir(context);
+    if (!legacy) return undefined;
+    try {
+      return JSON.parse(await fs.readFile(path.join(legacy, file), "utf8"));
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+/** Write JSON to the global dir; fall back to the legacy per-set dir. */
+async function writeStored(context: Ctx, file: string, data: unknown): Promise<void> {
+  const json = JSON.stringify(data, null, 2);
+  try {
+    await fs.mkdir(globalDir(), { recursive: true });
+    await fs.writeFile(path.join(globalDir(), file), json);
+  } catch (e) {
+    const legacy = legacyDir(context);
+    if (!legacy) {
+      console.error(`Loooprr: failed to save ${file}:`, e);
+      return;
+    }
+    try {
+      await fs.mkdir(legacy, { recursive: true });
+      await fs.writeFile(path.join(legacy, file), json);
+    } catch (e2) {
+      console.error(`Loooprr: failed to save ${file}:`, e2);
+    }
+  }
 }
 
 async function loadParams(context: Ctx): Promise<CollageParams> {
-  try {
-    const raw = await fs.readFile(path.join(storageDir(context), SETTINGS_FILE), "utf8");
-    return sanitizeParams(JSON.parse(raw));
-  } catch {
-    return DEFAULT_PARAMS;
-  }
+  const raw = await readStored(context, SETTINGS_FILE);
+  return raw === undefined ? DEFAULT_PARAMS : sanitizeParams(raw);
 }
 
 async function saveParams(context: Ctx, params: CollageParams): Promise<void> {
-  try {
-    const dir = storageDir(context);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(path.join(dir, SETTINGS_FILE), JSON.stringify(params, null, 2));
-  } catch (e) {
-    console.error("Loooprr: failed to save settings:", e);
-  }
+  await writeStored(context, SETTINGS_FILE, params);
 }
 
 const FAVORITES_FILE = "favorites.json";
 
 async function loadFavorites(context: Ctx): Promise<Favorite[]> {
-  try {
-    const raw = await fs.readFile(path.join(storageDir(context), FAVORITES_FILE), "utf8");
-    return sanitizeFavorites(JSON.parse(raw));
-  } catch {
-    return [];
-  }
+  const raw = await readStored(context, FAVORITES_FILE);
+  const favorites = sanitizeFavorites(raw);
+  // Migrate legacy per-set saves to the global dir so they appear everywhere.
+  if (favorites.length) await writeStored(context, FAVORITES_FILE, favorites);
+  return favorites;
 }
 
 async function saveFavorites(context: Ctx, favorites: Favorite[]): Promise<void> {
-  try {
-    const dir = storageDir(context);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(
-      path.join(dir, FAVORITES_FILE),
-      JSON.stringify(favorites, null, 2),
-    );
-  } catch (e) {
-    console.error("Loooprr: failed to save favorites:", e);
-  }
+  await writeStored(context, FAVORITES_FILE, favorites);
 }
 
 /** Render a track's pre-FX audio over a beat range and decode it. */
