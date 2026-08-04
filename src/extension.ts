@@ -25,7 +25,13 @@ import {
 
 import { buildCollageLoop, type AudioBuffers } from "./dsp.js";
 import { encodeWav24 } from "./wav.js";
-import { DEFAULT_PARAMS, sanitizeParams, type CollageParams } from "./params.js";
+import {
+  DEFAULT_PARAMS,
+  sanitizeFavorites,
+  sanitizeParams,
+  type CollageParams,
+  type Favorite,
+} from "./params.js";
 import interfaceHtml from "./interface.html";
 
 type V = "1.0.0";
@@ -35,7 +41,7 @@ const SETTINGS_FILE = "settings.json";
 
 /** Design size of the settings dialog; the real window is this times uiScale. */
 const DIALOG_W = 480;
-const DIALOG_H = 960;
+const DIALOG_H = 1040;
 
 /**
  * Tiny splash dialog that reports the screen's available size and closes
@@ -103,6 +109,30 @@ async function saveParams(context: Ctx, params: CollageParams): Promise<void> {
   }
 }
 
+const FAVORITES_FILE = "favorites.json";
+
+async function loadFavorites(context: Ctx): Promise<Favorite[]> {
+  try {
+    const raw = await fs.readFile(path.join(storageDir(context), FAVORITES_FILE), "utf8");
+    return sanitizeFavorites(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+async function saveFavorites(context: Ctx, favorites: Favorite[]): Promise<void> {
+  try {
+    const dir = storageDir(context);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(
+      path.join(dir, FAVORITES_FILE),
+      JSON.stringify(favorites, null, 2),
+    );
+  } catch (e) {
+    console.error("Loooprr: failed to save favorites:", e);
+  }
+}
+
 /** Render a track's pre-FX audio over a beat range and decode it. */
 async function renderTrack(
   context: Ctx,
@@ -145,18 +175,26 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
   // (it cannot be resized afterwards); the page zooms its content to match.
   // uiScale is the user's preference (A-/A+), capped by what fits.
   const current = await loadParams(context);
+  const favorites = await loadFavorites(context);
   const fitScale = await measureFitScale(context);
   const scale = Math.max(0.5, Math.min(current.uiScale, fitScale));
-  const html = interfaceHtml.replace(
-    "__PARAMS__",
-    JSON.stringify({ ...current, uiScale: scale }),
-  );
+  const html = interfaceHtml
+    .replace("__PARAMS__", JSON.stringify({ ...current, uiScale: scale }))
+    .replace("__FAVORITES__", JSON.stringify(favorites));
   const result = await context.ui.showModalDialog(
     `data:text/html,${encodeURIComponent(html)}`,
     Math.round(DIALOG_W * scale),
     Math.round(DIALOG_H * scale),
   );
-  const parsed = JSON.parse(result) as { cancelled?: boolean; uiScale?: number };
+  const parsed = JSON.parse(result) as {
+    cancelled?: boolean;
+    uiScale?: number;
+    favorites?: unknown;
+  };
+  // Favorites edits (save/rename/delete) persist even on cancel.
+  if (parsed.favorites !== undefined) {
+    await saveFavorites(context, sanitizeFavorites(parsed.favorites));
+  }
   if (parsed.cancelled) {
     // Still remember a scale change, so Cancel doesn't undo the resize.
     const scale = sanitizeParams({ ...current, uiScale: parsed.uiScale }).uiScale;

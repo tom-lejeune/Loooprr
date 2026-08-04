@@ -140,6 +140,48 @@
     100% { transform: rotate(360deg); }
   }
 
+  .favBar { display: flex; align-items: stretch; gap: 10px; }
+  .favSave {
+    background: var(--pink); color: #fff;
+    border: 3px solid var(--ink); border-radius: 9px;
+    box-shadow: 3px 3px 0 var(--ink);
+    font-size: 11px; font-weight: 900; letter-spacing: 0.05em;
+    padding: 8px 14px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    flex: 0 0 auto;
+  }
+  .favSave .heart { font-size: 18px; }
+  .favSave:hover { transform: translate(-1px, -1px); }
+  .favList {
+    flex: 1; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+    padding: 2px;
+  }
+  .favList::-webkit-scrollbar { display: none; }
+  .favList:empty::after {
+    content: "No favorites yet — dial in a loop you love, then save the recipe.";
+    font-size: 10px; color: #999; align-self: center; padding: 0 6px;
+  }
+  .fav {
+    flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: #fff; border: 3px solid var(--ink); border-radius: 9px;
+    box-shadow: 2px 2px 0 var(--ink);
+    padding: 5px 8px 4px; cursor: pointer; position: relative; min-width: 86px;
+  }
+  .fav:hover { transform: translate(-1px, -1px); }
+  .fav.loaded { background: var(--yellow); }
+  .favName {
+    font-size: 9px; font-weight: 900; letter-spacing: 0.04em; white-space: nowrap;
+    max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .favName[contenteditable="true"] { outline: 2px dashed var(--pink); text-overflow: clip; }
+  .favDel {
+    position: absolute; top: -9px; right: -9px; width: 18px; height: 18px;
+    background: var(--ink); color: var(--paper); border-radius: 50%;
+    font-size: 11px; font-weight: 900; line-height: 18px; text-align: center;
+    display: none;
+  }
+  .fav:hover .favDel { display: block; }
+
   footer {
     flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
     padding: 14px 22px 20px;
@@ -262,6 +304,12 @@
     <div class="seedVal" id="seedVal"></div>
     <div class="dice" id="newSeed"><span class="die">🎲</span><span class="txt">ROLL</span></div>
   </div>
+
+  <div class="label"><span class="chip" style="background:var(--pink)"></span>FAVORITES — SAVED RECIPES (SEED + ALL SETTINGS)</div>
+  <div class="favBar">
+    <div class="favSave" id="favSave"><span class="heart">♥</span><span>SAVE</span></div>
+    <div class="favList" id="favList"></div>
+  </div>
 </main>
 <footer>
   <p>Slices &amp; shuffles the selected tracks into new tempo-synced loops — chops stay on the grid.</p>
@@ -318,22 +366,25 @@
     });
   });
 
-  function bindSlider(id) {
+  const SLIDER_IDS = ["reverseChance", "bitcrushChance", "retriggerChance",
+    "tapestopChance", "gaterChance", "repitchChance"];
+  function refreshSliders() {
+    SLIDER_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      const pct = document.getElementById(id + "Pct");
+      el.value = Math.round(state[id] * 100);
+      pct.textContent = el.value + "%";
+    });
+  }
+  SLIDER_IDS.forEach((id) => {
     const el = document.getElementById(id);
     const pct = document.getElementById(id + "Pct");
-    el.value = Math.round(state[id] * 100);
-    pct.textContent = el.value + "%";
     el.addEventListener("input", () => {
       state[id] = el.value / 100;
       pct.textContent = el.value + "%";
     });
-  }
-  bindSlider("reverseChance");
-  bindSlider("bitcrushChance");
-  bindSlider("retriggerChance");
-  bindSlider("tapestopChance");
-  bindSlider("gaterChance");
-  bindSlider("repitchChance");
+  });
+  refreshSliders();
 
   // ---- Seed as a generated Memphis badge: the seed IS the artwork. ----
   // Same mulberry32 as the DSP, so the drawing is a faithful visual hash.
@@ -424,15 +475,102 @@
     }, 450);
   });
 
+  // ---- Favorites: named recipes (seed + all DSP settings). Edits live here
+  // and travel back with the dialog result (also on cancel). ----
+  const favorites = __FAVORITES__;
+  const favList = document.getElementById("favList");
+  const ADJ = ["DISCO", "NEON", "FUNKY", "COSMIC", "RUBBER", "TURBO", "MELLOW",
+    "SPICY", "WOBBLY", "LASER", "VELVET", "SOGGY", "MAJESTIC", "SNEAKY"];
+  const NOUN = ["WALRUS", "CACTUS", "PANTHER", "NOODLE", "TOASTER", "GECKO",
+    "MAMMOTH", "PICKLE", "COMET", "BANJO", "YETI", "DONUT", "PIGEON", "SAUNA"];
+  function funName() {
+    let name;
+    let guard = 0;
+    do {
+      name = ADJ[Math.floor(Math.random() * ADJ.length)] + " " +
+             NOUN[Math.floor(Math.random() * NOUN.length)];
+      guard++;
+    } while (favorites.some((f) => f.name === name) && guard < 50);
+    return name;
+  }
+  function recipeFromState() {
+    const p = { ...state };
+    delete p.uiScale;
+    delete p.favorites;
+    return p;
+  }
+  function miniArt(seed) {
+    const rng = mulberry32(seed >>> 0);
+    let shapes = "";
+    for (let i = 0; i < 3; i++) {
+      shapes += seedShape(rng, 22 + i * 26, 14, 16);
+    }
+    return `<svg width="76" height="28" viewBox="0 0 76 28">${shapes}</svg>`;
+  }
+  function renderFavorites() {
+    favList.innerHTML = "";
+    favorites.forEach((fav, i) => {
+      const el = document.createElement("div");
+      el.className = "fav";
+      el.innerHTML = `${miniArt(fav.params.seed)}<span class="favName"></span><span class="favDel">×</span>`;
+      const nameEl = el.querySelector(".favName");
+      nameEl.textContent = fav.name;
+      el.title = "Click to load · double-click the name to rename";
+      el.addEventListener("click", (e) => {
+        if (e.target.classList.contains("favDel")) {
+          favorites.splice(i, 1);
+          renderFavorites();
+          return;
+        }
+        if (nameEl.isContentEditable) return;
+        Object.keys(fav.params).forEach((k) => { state[k] = fav.params[k]; });
+        syncSegments();
+        refreshSliders();
+        drawSeed(state.seed);
+        favList.querySelectorAll(".fav").forEach((c) => c.classList.remove("loaded"));
+        el.classList.add("loaded");
+      });
+      nameEl.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        nameEl.contentEditable = "true";
+        nameEl.focus();
+        document.getSelection().selectAllChildren(nameEl);
+      });
+      nameEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); nameEl.blur(); }
+        e.stopPropagation(); // typing must not trigger the dialog's Enter/Escape
+      });
+      nameEl.addEventListener("blur", () => {
+        nameEl.contentEditable = "false";
+        const name = nameEl.textContent.trim().slice(0, 40);
+        if (name) fav.name = name;
+        nameEl.textContent = fav.name;
+      });
+      favList.appendChild(el);
+    });
+  }
+  document.getElementById("favSave").addEventListener("click", () => {
+    if (favorites.length >= 24) favorites.shift();
+    favorites.push({ name: funName(), params: recipeFromState() });
+    renderFavorites();
+    favList.scrollLeft = favList.scrollWidth;
+  });
+  renderFavorites();
+
+  function withFavorites(result) {
+    return { ...result, favorites };
+  }
   function cancelResult() {
-    // Report the scale even on cancel, so a resize is not lost.
+    // Report scale and favorites even on cancel, so those edits are not lost.
     return { cancelled: true, uiScale: state.uiScale };
   }
-  document.getElementById("create").addEventListener("click", () => closeWithResult(state));
-  document.getElementById("cancel").addEventListener("click", () => closeWithResult(cancelResult()));
+  document.getElementById("create").addEventListener("click", () =>
+    closeWithResult(withFavorites(state)));
+  document.getElementById("cancel").addEventListener("click", () =>
+    closeWithResult(withFavorites(cancelResult())));
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") closeWithResult(state);
-    if (e.key === "Escape") closeWithResult(cancelResult());
+    if (e.key === "Enter") closeWithResult(withFavorites(state));
+    if (e.key === "Escape") closeWithResult(withFavorites(cancelResult()));
   });
 
   syncSegments();

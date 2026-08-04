@@ -103,3 +103,30 @@ export function sanitizeParams(raw: unknown): CollageParams {
     uiScale,
   };
 }
+
+/**
+ * A saved "recipe": seed + all DSP settings. Loading one reproduces the exact
+ * same chops on any material (the chops depend on every parameter, not just
+ * the seed).
+ */
+export interface Favorite {
+  name: string;
+  params: CollageParams;
+}
+
+export const MAX_FAVORITES = 24;
+
+/** Coerce untrusted input (dialog JSON, stored file) into a valid favorites list. */
+export function sanitizeFavorites(raw: unknown): Favorite[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Favorite[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const name = String(r.name ?? "").trim().slice(0, 40);
+    if (!name) continue;
+    out.push({ name, params: sanitizeParams(r.params) });
+    if (out.length >= MAX_FAVORITES) break;
+  }
+  return out;
+}

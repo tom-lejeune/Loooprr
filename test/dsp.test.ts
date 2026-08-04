@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { buildCollageLoop, OUTPUT_SAMPLE_RATE, type AudioBuffers } from "../src/dsp.js";
 import { encodeWav24 } from "../src/wav.js";
-import { DEFAULT_PARAMS, sanitizeParams } from "../src/params.js";
+import { DEFAULT_PARAMS, sanitizeFavorites, sanitizeParams } from "../src/params.js";
 
 /** Deterministic pseudo-noise source, long enough for any slice. */
 function noiseSource(seconds = 4, sampleRate = 48000, channels = 2): AudioBuffers {
@@ -254,4 +254,26 @@ test("sanitizeParams clamps and defaults bad input", () => {
   assert.equal(p.seed, DEFAULT_PARAMS.seed);
   const round = sanitizeParams(p);
   assert.deepEqual(round, p);
+});
+
+test("sanitizeFavorites keeps valid recipes and drops junk", () => {
+  const favs = sanitizeFavorites([
+    { name: "  DISCO WALRUS  ", params: { ...DEFAULT_PARAMS, seed: 42 } },
+    { name: "", params: DEFAULT_PARAMS }, // empty name -> dropped
+    "not an object", // dropped
+    { name: "X".repeat(99), params: { seed: 7 } }, // name clamped, params defaulted
+  ]);
+  assert.equal(favs.length, 2);
+  assert.equal(favs[0]!.name, "DISCO WALRUS");
+  assert.equal(favs[0]!.params.seed, 42);
+  assert.equal(favs[1]!.name.length, 40);
+  assert.equal(favs[1]!.params.seed, 7);
+  assert.equal(favs[1]!.params.loopBars, DEFAULT_PARAMS.loopBars);
+  // Not an array -> empty.
+  assert.deepEqual(sanitizeFavorites({ evil: true }), []);
+  // Capped at 24.
+  const many = sanitizeFavorites(
+    Array.from({ length: 40 }, (_, i) => ({ name: `F${i}`, params: DEFAULT_PARAMS })),
+  );
+  assert.equal(many.length, 24);
 });
