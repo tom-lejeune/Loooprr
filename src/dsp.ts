@@ -113,7 +113,7 @@ export function buildCollageLoop(
     const endFrame = Math.round((posBeats + sliceBeats) * secPerBeat * OUTPUT_SAMPLE_RATE);
     // Swing: odd slots start late (up to a third of the slot), shortening them.
     let startFrame = baseStart;
-    if (opts.swing.amount > 0 && slotIdx % 2 === 1) {
+    if (opts.swing.on && opts.swing.amount > 0 && slotIdx % 2 === 1) {
       startFrame = baseStart + Math.floor((endFrame - baseStart) * 0.33 * opts.swing.amount);
     }
     const nFrames = endFrame - startFrame;

@@ -52,7 +52,7 @@ export interface CollageParams {
 
   // Groove & space — applied on top of everything.
   autopan: { on: boolean; amount: number };
-  swing: { amount: number };
+  swing: { on: boolean; amount: number };
   endfill: { on: boolean; chance: number };
 }
 
@@ -75,7 +75,7 @@ export const DEFAULT_PARAMS: CollageParams = {
   tonaldelay: { on: false, chance: 0.15 },
   dropout: { on: false, chance: 0.15 },
   autopan: { on: false, amount: 0.6 },
-  swing: { amount: 0 },
+  swing: { on: false, amount: 0.3 },
   endfill: { on: false, chance: 0.5 },
 };
 
@@ -203,7 +203,11 @@ export function sanitizeParams(raw: unknown): CollageParams {
       on: bool(autopanRaw.on, d.autopan.on),
       amount: clamp01(autopanRaw.amount, d.autopan.amount),
     },
-    swing: { amount: clamp01(swingRaw.amount, d.swing.amount) },
+    swing: (() => {
+      const amount = clamp01(swingRaw.amount, d.swing.amount);
+      // Pre-1.4.3 swing had no toggle: amount > 0 meant on.
+      return { on: bool(swingRaw.on, amount > 0 && swingRaw.amount !== undefined), amount };
+    })(),
     endfill: {
       on: bool(endfillRaw.on, d.endfill.on),
       chance: clamp01(endfillRaw.chance, d.endfill.chance),

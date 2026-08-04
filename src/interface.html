@@ -468,7 +468,7 @@
   ];
   const GROOVE_DEFS = [
     { key: "autopan", label: "AUTO-PAN", acc: "var(--teal)", prop: "amount" },
-    { key: "swing",   label: "SWING",    acc: "var(--pink)", prop: "amount", noToggle: true },
+    { key: "swing",   label: "SWING",    acc: "var(--pink)", prop: "amount" },
     { key: "endfill", label: "END FILL", acc: "var(--yellow)", prop: "chance" },
   ];
   const fxSyncFns = [];
@@ -518,7 +518,12 @@
       sync();
     });
     if (!def.noToggle) {
-      row.querySelector(".fxTog").addEventListener("click", () => { st().on = !st().on; sync(); });
+      row.querySelector(".fxTog").addEventListener("click", () => {
+        st().on = !st().on;
+        // Switching on at 0% would be inaudible — jump to "a little bit".
+        if (st().on && !(st()[prop] > 0)) st()[prop] = 0.3;
+        sync();
+      });
     }
 
     function sync() {

@@ -35,7 +35,7 @@ function allFxOff() {
     tonaldelay: { on: false, chance: 0 },
     dropout: { on: false, chance: 0 },
     autopan: { on: false, amount: 0 },
-    swing: { amount: 0 },
+    swing: { on: false, amount: 0 },
     endfill: { on: false, chance: 0 },
   };
 }
@@ -55,7 +55,7 @@ function allFxMax() {
     tonaldelay: { on: true, chance: 1 },
     dropout: { on: true, chance: 0.3 },
     autopan: { on: true, amount: 1 },
-    swing: { amount: 0.6 },
+    swing: { on: true, amount: 0.6 },
     endfill: { on: true, chance: 1 },
   };
 }
@@ -335,6 +335,10 @@ test("sanitizeParams clamps and defaults bad nested input", () => {
   assert.equal(p.seed, DEFAULT_PARAMS.seed);
   assert.equal(p.uiScale, 1);
   assert.equal(p.swing.amount, 0);
+  assert.equal(p.swing.on, false); // clamped-to-0 legacy amount cannot mean on
+  // Pre-1.4.3 migration: an amount without a toggle means on when > 0.
+  assert.equal(sanitizeParams({ swing: { amount: 0.4 } }).swing.on, true);
+  assert.equal(sanitizeParams({ swing: { amount: 0 } }).swing.on, false);
   const round = sanitizeParams(p);
   assert.deepEqual(round, p);
 });
