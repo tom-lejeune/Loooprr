@@ -109,10 +109,16 @@ export function sanitizeParams(raw: unknown): CollageParams {
  * same chops on any material (the chops depend on every parameter, not just
  * the seed).
  */
+/** Color tags for grouping favorites; "" = untagged. */
+export const FAVORITE_COLORS = ["", "yellow", "pink", "teal", "orange", "purple", "blue"] as const;
+export type FavoriteColor = (typeof FAVORITE_COLORS)[number];
+
 export interface Favorite {
   name: string;
   /** Creation time, epoch ms; 0 for favorites saved before this field existed. */
   created: number;
+  /** Color tag for visual grouping ("" = none). */
+  color: FavoriteColor;
   params: CollageParams;
 }
 
@@ -129,7 +135,10 @@ export function sanitizeFavorites(raw: unknown): Favorite[] {
     if (!name) continue;
     const createdNum = Number(r.created);
     const created = Number.isFinite(createdNum) && createdNum > 0 ? createdNum : 0;
-    out.push({ name, created, params: sanitizeParams(r.params) });
+    const color = FAVORITE_COLORS.includes(r.color as FavoriteColor)
+      ? (r.color as FavoriteColor)
+      : "";
+    out.push({ name, created, color, params: sanitizeParams(r.params) });
     if (out.length >= MAX_FAVORITES) break;
   }
   return out;

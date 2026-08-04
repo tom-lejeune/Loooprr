@@ -214,6 +214,31 @@
     background: var(--ink); color: var(--paper); border-radius: 50%;
     font-size: 12px; font-weight: 900; line-height: 22px; text-align: center;
   }
+  .frColor {
+    width: 15px; height: 15px; flex: 0 0 auto;
+    border: 2.5px solid var(--ink); border-radius: 4px; background: #fff;
+  }
+
+  /* Custom right-click menu for favorite rows. */
+  #ctxMenu {
+    position: fixed; z-index: 20; display: none; min-width: 150px;
+    background: #fff; border: 3px solid var(--ink); border-radius: 9px;
+    box-shadow: 4px 4px 0 var(--ink); padding: 8px; user-select: none;
+  }
+  #ctxMenu.open { display: block; }
+  .ctxItem {
+    font-size: 11px; font-weight: 900; letter-spacing: 0.05em;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+  }
+  .ctxItem:hover { background: var(--yellow); }
+  .ctxSwatches { display: flex; gap: 6px; padding: 6px 10px 8px; }
+  .swatch {
+    width: 20px; height: 20px; border: 2.5px solid var(--ink); border-radius: 5px;
+    cursor: pointer;
+  }
+  .swatch:hover { transform: translate(-1px, -1px); }
+  .swatch.none { background:
+    linear-gradient(to top right, #fff 44%, var(--ink) 46%, var(--ink) 54%, #fff 56%); }
 
   footer {
     flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
@@ -349,11 +374,18 @@
 <div id="favOverlay">
   <div class="favHead">
     <h2>FAVORITES</h2>
-    <div class="sortBtn" id="sortDate">BY DATE</div>
-    <div class="sortBtn" id="sortName">BY NAME</div>
+    <div class="sortBtn" id="sortDate">DATE</div>
+    <div class="sortBtn" id="sortName">NAME</div>
+    <div class="sortBtn" id="sortColor">COLOR</div>
     <div class="favClose" id="favClose">×</div>
   </div>
   <div class="favRows" id="favRows"></div>
+</div>
+
+<div id="ctxMenu">
+  <div class="ctxItem" id="ctxRename">✎ RENAME</div>
+  <div class="ctxSwatches" id="ctxSwatches"></div>
+  <div class="ctxItem" id="ctxDelete">🗑 DELETE</div>
 </div>
 <footer>
   <p>Slices &amp; shuffles the selected tracks into new tempo-synced loops — chops stay on the grid.</p>
@@ -548,8 +580,19 @@
   const favRows = document.getElementById("favRows");
   const favInfo = document.getElementById("favInfo");
   const favCount = document.getElementById("favCount");
-  const sortBtns = { date: document.getElementById("sortDate"), name: document.getElementById("sortName") };
+  const sortBtns = {
+    date: document.getElementById("sortDate"),
+    name: document.getElementById("sortName"),
+    color: document.getElementById("sortColor"),
+  };
   let sortBy = "date";
+  const COLOR_HEX = { yellow: "#ffd600", pink: "#ff4d8d", teal: "#00c6ae",
+    orange: "#ff8c1a", purple: "#9b5de5", blue: "#29a8ff" };
+  const COLOR_ORDER = ["yellow", "pink", "teal", "orange", "purple", "blue", ""];
+
+  // The browser's own right-click menu offers "Reload", which resets the
+  // dialog and silently discards unsaved favorites edits — kill it everywhere.
+  document.addEventListener("contextmenu", (e) => e.preventDefault());
 
   function fmtDate(ms) {
     if (!ms) return "date unknown";
@@ -584,19 +627,23 @@
       favRows.appendChild(empty);
       return;
     }
-    const sorted = [...favorites].sort((a, b) =>
-      sortBy === "name"
-        ? a.name.localeCompare(b.name)
-        : (b.created || 0) - (a.created || 0),
-    );
+    const sorted = [...favorites].sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "color") {
+        const d = COLOR_ORDER.indexOf(a.color || "") - COLOR_ORDER.indexOf(b.color || "");
+        if (d !== 0) return d;
+      }
+      return (b.created || 0) - (a.created || 0);
+    });
     sorted.forEach((fav) => {
       const el = document.createElement("div");
       el.className = "favRow";
-      el.innerHTML = `<div class="frMain"><div class="frName"></div><div class="frMeta"></div></div><div class="frDel">×</div>`;
+      el.innerHTML = `<div class="frColor"></div><div class="frMain"><div class="frName"></div><div class="frMeta"></div></div><div class="frDel">×</div>`;
       const nameEl = el.querySelector(".frName");
       nameEl.textContent = fav.name;
+      if (fav.color) el.querySelector(".frColor").style.background = COLOR_HEX[fav.color];
       el.querySelector(".frMeta").textContent = `${fmtDate(fav.created)}  ·  ${favSummary(fav.params)}`;
-      el.title = "Click to load · double-click the name to rename";
+      el.title = "Click to load · right-click to rename, color or delete";
       el.addEventListener("click", (e) => {
         if (e.target.classList.contains("frDel")) {
           favorites.splice(favorites.indexOf(fav), 1);
@@ -607,11 +654,9 @@
         if (nameEl.isContentEditable) return;
         loadFavorite(fav);
       });
-      nameEl.addEventListener("dblclick", (e) => {
-        e.stopPropagation();
-        nameEl.contentEditable = "true";
-        nameEl.focus();
-        document.getSelection().selectAllChildren(nameEl);
+      el.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        openCtxMenu(fav, nameEl, e.clientX, e.clientY);
       });
       nameEl.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); nameEl.blur(); }
@@ -627,14 +672,66 @@
       favRows.appendChild(el);
     });
   }
+
+  // ---- Right-click menu: rename, color tag, delete. ----
+  const ctxMenu = document.getElementById("ctxMenu");
+  const ctxSwatches = document.getElementById("ctxSwatches");
+  let ctxTarget = null; // { fav, nameEl }
+  ["", "yellow", "pink", "teal", "orange", "purple", "blue"].forEach((c) => {
+    const sw = document.createElement("div");
+    sw.className = "swatch" + (c ? "" : " none");
+    if (c) sw.style.background = COLOR_HEX[c];
+    sw.title = c || "no color";
+    sw.addEventListener("click", () => {
+      if (ctxTarget) { ctxTarget.fav.color = c; renderFavRows(); }
+      closeCtxMenu();
+    });
+    ctxSwatches.appendChild(sw);
+  });
+  function openCtxMenu(fav, nameEl, x, y) {
+    ctxTarget = { fav, nameEl };
+    ctxMenu.classList.add("open");
+    // Keep the menu inside the window.
+    const r = ctxMenu.getBoundingClientRect();
+    ctxMenu.style.left = Math.min(x, window.innerWidth - r.width - 8) + "px";
+    ctxMenu.style.top = Math.min(y, window.innerHeight - r.height - 8) + "px";
+  }
+  function closeCtxMenu() {
+    ctxMenu.classList.remove("open");
+  }
+  document.getElementById("ctxRename").addEventListener("click", () => {
+    if (ctxTarget) {
+      const nameEl = ctxTarget.nameEl;
+      nameEl.contentEditable = "true";
+      nameEl.focus();
+      document.getSelection().selectAllChildren(nameEl);
+    }
+    closeCtxMenu();
+  });
+  document.getElementById("ctxDelete").addEventListener("click", () => {
+    if (ctxTarget) {
+      favorites.splice(favorites.indexOf(ctxTarget.fav), 1);
+      syncFavBar();
+      renderFavRows();
+    }
+    closeCtxMenu();
+  });
+  document.addEventListener("click", (e) => {
+    if (ctxMenu.classList.contains("open") && !ctxMenu.contains(e.target)) {
+      closeCtxMenu();
+      // Swallow the click so dismissing the menu can't accidentally load a row.
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
   function setSort(key) {
     sortBy = key;
-    sortBtns.date.classList.toggle("on", key === "date");
-    sortBtns.name.classList.toggle("on", key === "name");
+    Object.entries(sortBtns).forEach(([k, btn]) => btn.classList.toggle("on", k === key));
     renderFavRows();
   }
   sortBtns.date.addEventListener("click", () => setSort("date"));
   sortBtns.name.addEventListener("click", () => setSort("name"));
+  sortBtns.color.addEventListener("click", () => setSort("color"));
   document.getElementById("favBrowse").addEventListener("click", () => {
     renderFavRows();
     favOverlay.classList.add("open");
@@ -643,7 +740,7 @@
     favOverlay.classList.remove("open"));
   document.getElementById("favSave").addEventListener("click", () => {
     if (favorites.length >= 64) favorites.shift();
-    const fav = { name: funName(), created: Date.now(), params: recipeFromState() };
+    const fav = { name: funName(), created: Date.now(), color: "", params: recipeFromState() };
     favorites.push(fav);
     syncFavBar();
     favInfo.innerHTML = `Saved: <b></b>`;

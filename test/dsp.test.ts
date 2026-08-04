@@ -258,14 +258,16 @@ test("sanitizeParams clamps and defaults bad input", () => {
 
 test("sanitizeFavorites keeps valid recipes and drops junk", () => {
   const favs = sanitizeFavorites([
-    { name: "  DISCO WALRUS  ", created: 1754300000000, params: { ...DEFAULT_PARAMS, seed: 42 } },
+    { name: "  DISCO WALRUS  ", created: 1754300000000, color: "teal", params: { ...DEFAULT_PARAMS, seed: 42 } },
     { name: "", params: DEFAULT_PARAMS }, // empty name -> dropped
     "not an object", // dropped
-    { name: "X".repeat(99), params: { seed: 7 } }, // name clamped, params defaulted
+    { name: "X".repeat(99), color: "mauve", params: { seed: 7 } }, // name clamped, bad color -> ""
   ]);
   assert.equal(favs.length, 2);
   assert.equal(favs[0]!.name, "DISCO WALRUS");
   assert.equal(favs[0]!.created, 1754300000000);
+  assert.equal(favs[0]!.color, "teal");
+  assert.equal(favs[1]!.color, "");
   assert.equal(favs[0]!.params.seed, 42);
   assert.equal(favs[1]!.name.length, 40);
   assert.equal(favs[1]!.created, 0); // missing timestamp -> 0 ("date unknown")
