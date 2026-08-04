@@ -111,10 +111,12 @@ export function sanitizeParams(raw: unknown): CollageParams {
  */
 export interface Favorite {
   name: string;
+  /** Creation time, epoch ms; 0 for favorites saved before this field existed. */
+  created: number;
   params: CollageParams;
 }
 
-export const MAX_FAVORITES = 24;
+export const MAX_FAVORITES = 64;
 
 /** Coerce untrusted input (dialog JSON, stored file) into a valid favorites list. */
 export function sanitizeFavorites(raw: unknown): Favorite[] {
@@ -125,7 +127,9 @@ export function sanitizeFavorites(raw: unknown): Favorite[] {
     const r = item as Record<string, unknown>;
     const name = String(r.name ?? "").trim().slice(0, 40);
     if (!name) continue;
-    out.push({ name, params: sanitizeParams(r.params) });
+    const createdNum = Number(r.created);
+    const created = Number.isFinite(createdNum) && createdNum > 0 ? createdNum : 0;
+    out.push({ name, created, params: sanitizeParams(r.params) });
     if (out.length >= MAX_FAVORITES) break;
   }
   return out;

@@ -258,22 +258,24 @@ test("sanitizeParams clamps and defaults bad input", () => {
 
 test("sanitizeFavorites keeps valid recipes and drops junk", () => {
   const favs = sanitizeFavorites([
-    { name: "  DISCO WALRUS  ", params: { ...DEFAULT_PARAMS, seed: 42 } },
+    { name: "  DISCO WALRUS  ", created: 1754300000000, params: { ...DEFAULT_PARAMS, seed: 42 } },
     { name: "", params: DEFAULT_PARAMS }, // empty name -> dropped
     "not an object", // dropped
     { name: "X".repeat(99), params: { seed: 7 } }, // name clamped, params defaulted
   ]);
   assert.equal(favs.length, 2);
   assert.equal(favs[0]!.name, "DISCO WALRUS");
+  assert.equal(favs[0]!.created, 1754300000000);
   assert.equal(favs[0]!.params.seed, 42);
   assert.equal(favs[1]!.name.length, 40);
+  assert.equal(favs[1]!.created, 0); // missing timestamp -> 0 ("date unknown")
   assert.equal(favs[1]!.params.seed, 7);
   assert.equal(favs[1]!.params.loopBars, DEFAULT_PARAMS.loopBars);
   // Not an array -> empty.
   assert.deepEqual(sanitizeFavorites({ evil: true }), []);
-  // Capped at 24.
+  // Capped at 64.
   const many = sanitizeFavorites(
-    Array.from({ length: 40 }, (_, i) => ({ name: `F${i}`, params: DEFAULT_PARAMS })),
+    Array.from({ length: 99 }, (_, i) => ({ name: `F${i}`, params: DEFAULT_PARAMS })),
   );
-  assert.equal(many.length, 24);
+  assert.equal(many.length, 64);
 });

@@ -152,35 +152,68 @@
   }
   .favSave .heart { font-size: 18px; }
   .favSave:hover { transform: translate(-1px, -1px); }
-  .favList {
-    flex: 1; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-    padding: 2px;
+  .favInfo {
+    flex: 1; display: flex; flex-direction: column; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #888; overflow: hidden; padding: 0 4px;
   }
-  .favList::-webkit-scrollbar { display: none; }
-  .favList:empty::after {
-    content: "No favorites yet — dial in a loop you love, then save the recipe.";
-    font-size: 10px; color: #999; align-self: center; padding: 0 6px;
+  .favInfo b { color: var(--ink); }
+  .favBrowse {
+    background: #fff;
+    border: 3px solid var(--ink); border-radius: 9px;
+    box-shadow: 3px 3px 0 var(--ink);
+    font-size: 11px; font-weight: 900; letter-spacing: 0.05em;
+    padding: 8px 14px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    flex: 0 0 auto;
   }
-  .fav {
-    flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  .favBrowse .count { font-size: 16px; }
+  .favBrowse:hover { transform: translate(-1px, -1px); }
+
+  /* Favorites browser — a preset-list overlay like a synth's preset browser. */
+  #favOverlay {
+    position: fixed; inset: 0; background: var(--paper); z-index: 10;
+    display: none; flex-direction: column;
+  }
+  #favOverlay.open { display: flex; }
+  .favHead {
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 20px 12px; border-bottom: 3px solid var(--ink);
+  }
+  .favHead h2 { font-family: "Arial Black", "Segoe UI", sans-serif; font-size: 18px; flex: 1; }
+  .sortBtn {
+    background: #fff; border: 3px solid var(--ink); border-radius: 8px;
+    box-shadow: 2px 2px 0 var(--ink);
+    font-size: 10px; font-weight: 900; letter-spacing: 0.06em;
+    padding: 7px 12px; cursor: pointer;
+  }
+  .sortBtn.on { background: var(--yellow); }
+  .favClose {
+    width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+    background: var(--ink); color: var(--paper); border-radius: 8px;
+    font-size: 16px; font-weight: 900; cursor: pointer;
+  }
+  .favRows { flex: 1; overflow-y: auto; padding: 12px 20px; scrollbar-width: none; }
+  .favRows::-webkit-scrollbar { display: none; }
+  .favRows .empty { font-size: 11px; font-weight: 700; color: #999; padding: 8px 2px; }
+  .favRow {
+    display: flex; align-items: center; gap: 12px;
     background: #fff; border: 3px solid var(--ink); border-radius: 9px;
     box-shadow: 2px 2px 0 var(--ink);
-    padding: 5px 8px 4px; cursor: pointer; position: relative; min-width: 86px;
+    padding: 10px 14px; margin-bottom: 9px; cursor: pointer;
   }
-  .fav:hover { transform: translate(-1px, -1px); }
-  .fav.loaded { background: var(--yellow); }
-  .favName {
-    font-size: 9px; font-weight: 900; letter-spacing: 0.04em; white-space: nowrap;
-    max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+  .favRow:hover { transform: translate(-1px, -1px); }
+  .frMain { flex: 1; overflow: hidden; }
+  .frName {
+    font-size: 13px; font-weight: 900; letter-spacing: 0.03em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .favName[contenteditable="true"] { outline: 2px dashed var(--pink); text-overflow: clip; }
-  .favDel {
-    position: absolute; top: -9px; right: -9px; width: 18px; height: 18px;
+  .frName[contenteditable="true"] { outline: 2px dashed var(--pink); }
+  .frMeta { font-size: 10px; font-weight: 700; color: #888; margin-top: 2px; }
+  .frDel {
+    width: 22px; height: 22px; flex: 0 0 auto;
     background: var(--ink); color: var(--paper); border-radius: 50%;
-    font-size: 11px; font-weight: 900; line-height: 18px; text-align: center;
-    display: none;
+    font-size: 12px; font-weight: 900; line-height: 22px; text-align: center;
   }
-  .fav:hover .favDel { display: block; }
 
   footer {
     flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
@@ -308,9 +341,20 @@
   <div class="label"><span class="chip" style="background:var(--pink)"></span>FAVORITES — SAVED RECIPES (SEED + ALL SETTINGS)</div>
   <div class="favBar">
     <div class="favSave" id="favSave"><span class="heart">♥</span><span>SAVE</span></div>
-    <div class="favList" id="favList"></div>
+    <div class="favInfo" id="favInfo"></div>
+    <div class="favBrowse" id="favBrowse"><span class="count" id="favCount">0</span><span>BROWSE</span></div>
   </div>
 </main>
+
+<div id="favOverlay">
+  <div class="favHead">
+    <h2>FAVORITES</h2>
+    <div class="sortBtn" id="sortDate">BY DATE</div>
+    <div class="sortBtn" id="sortName">BY NAME</div>
+    <div class="favClose" id="favClose">×</div>
+  </div>
+  <div class="favRows" id="favRows"></div>
+</div>
 <footer>
   <p>Slices &amp; shuffles the selected tracks into new tempo-synced loops — chops stay on the grid.</p>
   <div class="btn" id="cancel">CANCEL</div>
@@ -478,7 +522,6 @@
   // ---- Favorites: named recipes (seed + all DSP settings). Edits live here
   // and travel back with the dialog result (also on cancel). ----
   const favorites = __FAVORITES__;
-  const favList = document.getElementById("favList");
   const ADJ = ["DISCO", "NEON", "FUNKY", "COSMIC", "RUBBER", "TURBO", "MELLOW",
     "SPICY", "WOBBLY", "LASER", "VELVET", "SOGGY", "MAJESTIC", "SNEAKY"];
   const NOUN = ["WALRUS", "CACTUS", "PANTHER", "NOODLE", "TOASTER", "GECKO",
@@ -499,36 +542,70 @@
     delete p.favorites;
     return p;
   }
-  function miniArt(seed) {
-    const rng = mulberry32(seed >>> 0);
-    let shapes = "";
-    for (let i = 0; i < 3; i++) {
-      shapes += seedShape(rng, 22 + i * 26, 14, 16);
-    }
-    return `<svg width="76" height="28" viewBox="0 0 76 28">${shapes}</svg>`;
+
+  // Browser overlay: a sortable preset list, like a synth's preset browser.
+  const favOverlay = document.getElementById("favOverlay");
+  const favRows = document.getElementById("favRows");
+  const favInfo = document.getElementById("favInfo");
+  const favCount = document.getElementById("favCount");
+  const sortBtns = { date: document.getElementById("sortDate"), name: document.getElementById("sortName") };
+  let sortBy = "date";
+
+  function fmtDate(ms) {
+    if (!ms) return "date unknown";
+    const d = new Date(ms);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   }
-  function renderFavorites() {
-    favList.innerHTML = "";
-    favorites.forEach((fav, i) => {
+  function favSummary(p) {
+    const slice = p.sliceLength === "random" ? "RND" : p.sliceLength;
+    return `${slice} · ${p.loopBars} ${p.loopBars === 1 ? "BAR" : "BARS"} · seed ${p.seed}`;
+  }
+  function syncFavBar() {
+    favCount.textContent = favorites.length;
+  }
+  function loadFavorite(fav) {
+    Object.keys(fav.params).forEach((k) => {
+      if (k !== "uiScale") state[k] = fav.params[k];
+    });
+    syncSegments();
+    refreshSliders();
+    drawSeed(state.seed);
+    favInfo.innerHTML = `Loaded: <b></b>`;
+    favInfo.querySelector("b").textContent = fav.name;
+    favOverlay.classList.remove("open");
+  }
+  function renderFavRows() {
+    favRows.innerHTML = "";
+    if (!favorites.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "No favorites yet — dial in a loop you love, then hit ♥ SAVE.";
+      favRows.appendChild(empty);
+      return;
+    }
+    const sorted = [...favorites].sort((a, b) =>
+      sortBy === "name"
+        ? a.name.localeCompare(b.name)
+        : (b.created || 0) - (a.created || 0),
+    );
+    sorted.forEach((fav) => {
       const el = document.createElement("div");
-      el.className = "fav";
-      el.innerHTML = `${miniArt(fav.params.seed)}<span class="favName"></span><span class="favDel">×</span>`;
-      const nameEl = el.querySelector(".favName");
+      el.className = "favRow";
+      el.innerHTML = `<div class="frMain"><div class="frName"></div><div class="frMeta"></div></div><div class="frDel">×</div>`;
+      const nameEl = el.querySelector(".frName");
       nameEl.textContent = fav.name;
+      el.querySelector(".frMeta").textContent = `${fmtDate(fav.created)}  ·  ${favSummary(fav.params)}`;
       el.title = "Click to load · double-click the name to rename";
       el.addEventListener("click", (e) => {
-        if (e.target.classList.contains("favDel")) {
-          favorites.splice(i, 1);
-          renderFavorites();
+        if (e.target.classList.contains("frDel")) {
+          favorites.splice(favorites.indexOf(fav), 1);
+          syncFavBar();
+          renderFavRows();
           return;
         }
         if (nameEl.isContentEditable) return;
-        Object.keys(fav.params).forEach((k) => { state[k] = fav.params[k]; });
-        syncSegments();
-        refreshSliders();
-        drawSeed(state.seed);
-        favList.querySelectorAll(".fav").forEach((c) => c.classList.remove("loaded"));
-        el.classList.add("loaded");
+        loadFavorite(fav);
       });
       nameEl.addEventListener("dblclick", (e) => {
         e.stopPropagation();
@@ -545,17 +622,36 @@
         const name = nameEl.textContent.trim().slice(0, 40);
         if (name) fav.name = name;
         nameEl.textContent = fav.name;
+        renderFavRows(); // re-sort in case the name changed order
       });
-      favList.appendChild(el);
+      favRows.appendChild(el);
     });
   }
-  document.getElementById("favSave").addEventListener("click", () => {
-    if (favorites.length >= 24) favorites.shift();
-    favorites.push({ name: funName(), params: recipeFromState() });
-    renderFavorites();
-    favList.scrollLeft = favList.scrollWidth;
+  function setSort(key) {
+    sortBy = key;
+    sortBtns.date.classList.toggle("on", key === "date");
+    sortBtns.name.classList.toggle("on", key === "name");
+    renderFavRows();
+  }
+  sortBtns.date.addEventListener("click", () => setSort("date"));
+  sortBtns.name.addEventListener("click", () => setSort("name"));
+  document.getElementById("favBrowse").addEventListener("click", () => {
+    renderFavRows();
+    favOverlay.classList.add("open");
   });
-  renderFavorites();
+  document.getElementById("favClose").addEventListener("click", () =>
+    favOverlay.classList.remove("open"));
+  document.getElementById("favSave").addEventListener("click", () => {
+    if (favorites.length >= 64) favorites.shift();
+    const fav = { name: funName(), created: Date.now(), params: recipeFromState() };
+    favorites.push(fav);
+    syncFavBar();
+    favInfo.innerHTML = `Saved: <b></b>`;
+    favInfo.querySelector("b").textContent = fav.name;
+    if (favOverlay.classList.contains("open")) renderFavRows();
+  });
+  setSort("date");
+  syncFavBar();
 
   function withFavorites(result) {
     return { ...result, favorites };
@@ -569,6 +665,11 @@
   document.getElementById("cancel").addEventListener("click", () =>
     closeWithResult(withFavorites(cancelResult())));
   document.addEventListener("keydown", (e) => {
+    // While the favorites browser is open, Escape closes IT, Enter is inert.
+    if (favOverlay.classList.contains("open")) {
+      if (e.key === "Escape") favOverlay.classList.remove("open");
+      return;
+    }
     if (e.key === "Enter") closeWithResult(withFavorites(state));
     if (e.key === "Escape") closeWithResult(withFavorites(cancelResult()));
   });

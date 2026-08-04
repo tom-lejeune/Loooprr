@@ -31,9 +31,10 @@ audio is never touched.
 - **Visual seed** — the seed is drawn as generative Memphis shapes; same
   shapes = same loops, bit-identical. Roll the 🎲 for a new one.
 - **Favorites** — save the current recipe (seed + ALL settings) under a
-  generated name like "DISCO WALRUS" (double-click to rename). Load it in any
-  later session, on any other track, and get the exact same chops on the new
-  material.
+  generated name like "DISCO WALRUS", then find it back in a preset-browser
+  overlay sortable by date or name, with creation timestamps. Double-click to
+  rename, × to delete. Load a favorite in any later session, on any other
+  track, and get the exact same chops on the new material.
 - Output: 48 kHz / 24-bit WAV, peak-normalized to −1 dBFS, imported into the
   project and placed as warped looping clips.
 
