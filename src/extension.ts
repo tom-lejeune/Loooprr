@@ -165,16 +165,16 @@ const FAVORITES_FILE = "favorites.json";
  */
 const FX_CLIP_COLORS: Record<string, number> = {
   plain: 0xb8b8b0,
-  reverse: 0x29a8ff,
+  reverse: 0x2f9bff,
   retrigger: 0xff4d8d,
   sweep: 0x9b5de5,
   tapestop: 0x00c6ae,
   scratch: 0xff8c1a,
   gater: 0xffd600,
-  repitch: 0x5ac8ff,
-  bitcrush: 0xd97706,
-  filter: 0x00a08b,
-  tonaldelay: 0xc77dff,
+  repitch: 0x2fd04c,
+  bitcrush: 0xd64545,
+  filter: 0xa3e635,
+  tonaldelay: 0xf07ddb,
   endfill: 0xff3355,
 };
 const FX_CLIP_TAGS: Record<string, string> = {

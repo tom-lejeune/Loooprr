@@ -19,12 +19,18 @@ export interface ChanceFx {
   chance: number;
 }
 export interface BitcrushFx extends ChanceFx { amount: BitcrushAmount }
+/** speed: how fast the tape brakes — fast stops mid-slice, slow rides out the whole slice. */
+export interface TapestopFx extends ChanceFx { speed: "fast" | "medium" | "slow" | "random" }
 /** gates: gates per slice; 0 = random (4 or 8). */
 export interface GaterFx extends ChanceFx { gates: 4 | 8 | 0 }
 export interface RepitchFx extends ChanceFx { dir: "up" | "down" | "both" }
 export interface SweepFx extends ChanceFx { dir: "up" | "down" | "random" }
 export interface ScratchFx extends ChanceFx { mode: "scrub" | "spinback" | "random" }
 export interface FilterFx extends ChanceFx { type: "lp" | "hp" | "random" }
+/** motion: how the ringing tone moves across the slice. */
+export interface TonalDelayFx extends ChanceFx {
+  motion: "static" | "rise" | "fall" | "wobble" | "random";
+}
 
 export interface CollageParams {
   sliceLength: SliceLength;
@@ -41,13 +47,13 @@ export interface CollageParams {
   reverse: ChanceFx;
   retrigger: ChanceFx;
   sweep: SweepFx;
-  tapestop: ChanceFx;
+  tapestop: TapestopFx;
   scratch: ScratchFx;
   gater: GaterFx;
   repitch: RepitchFx;
   bitcrush: BitcrushFx;
   filter: FilterFx;
-  tonaldelay: ChanceFx;
+  tonaldelay: TonalDelayFx;
   dropout: ChanceFx;
 
   // Groove & space — applied on top of everything.
@@ -68,13 +74,13 @@ export const DEFAULT_PARAMS: CollageParams = {
   reverse: { on: true, chance: 0.25 },
   retrigger: { on: true, chance: 0.1 },
   sweep: { on: false, chance: 0.2, dir: "random" },
-  tapestop: { on: true, chance: 0.1 },
+  tapestop: { on: true, chance: 0.1, speed: "random" },
   scratch: { on: false, chance: 0.15, mode: "random" },
   gater: { on: true, chance: 0.1, gates: 0 },
   repitch: { on: true, chance: 0.1, dir: "both" },
   bitcrush: { on: true, chance: 0.3, amount: "medium" },
   filter: { on: false, chance: 0.25, type: "random" },
-  tonaldelay: { on: false, chance: 0.15 },
+  tonaldelay: { on: false, chance: 0.15, motion: "random" },
   dropout: { on: false, chance: 0.15 },
   autopan: { on: false, amount: 0.6 },
   swing: { on: false, amount: 0.3 },
@@ -179,7 +185,10 @@ export function sanitizeParams(raw: unknown): CollageParams {
       ...chanceFx(r, "sweep", "__none", d.sweep),
       dir: nestedOption(r, "sweep", "dir", ["up", "down", "random"] as const, d.sweep.dir),
     },
-    tapestop: chanceFx(r, "tapestop", "tapestopChance", d.tapestop),
+    tapestop: {
+      ...chanceFx(r, "tapestop", "tapestopChance", d.tapestop),
+      speed: nestedOption(r, "tapestop", "speed", ["fast", "medium", "slow", "random"] as const, d.tapestop.speed),
+    },
     scratch: {
       ...chanceFx(r, "scratch", "__none", d.scratch),
       mode: nestedOption(r, "scratch", "mode", ["scrub", "spinback", "random"] as const, d.scratch.mode),
@@ -200,7 +209,11 @@ export function sanitizeParams(raw: unknown): CollageParams {
       ...chanceFx(r, "filter", "__none", d.filter),
       type: nestedOption(r, "filter", "type", ["lp", "hp", "random"] as const, d.filter.type),
     },
-    tonaldelay: chanceFx(r, "tonaldelay", "__none", d.tonaldelay),
+    tonaldelay: {
+      ...chanceFx(r, "tonaldelay", "__none", d.tonaldelay),
+      motion: nestedOption(r, "tonaldelay", "motion",
+        ["static", "rise", "fall", "wobble", "random"] as const, d.tonaldelay.motion),
+    },
     dropout: chanceFx(r, "dropout", "__none", d.dropout),
     autopan: {
       on: bool(autopanRaw.on, d.autopan.on),

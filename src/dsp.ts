@@ -180,21 +180,22 @@ export function buildCollageLoop(
     const retrigChunk = fx === "retrigger"
       ? Math.max(1, Math.round(nFrames / [2, 4, 8][Math.floor(rng() * 3)]!))
       : 0;
-    // Stutter sweep: repeats shrink geometrically; pitch glides up or down.
+    // Stutter sweep: repeats on BINARY grid divisions of the slot (halves ->
+    // quarters -> eighths, like a fill), so the stutter stays on the grid;
+    // pitch glides up or down across the repeats.
     let sweepBounds: number[] = [];
     let sweepRates: number[] = [];
     if (fx === "sweep") {
       const dir = opts.sweep.dir === "random" ? (rng() < 0.5 ? "up" : "down") : opts.sweep.dir;
-      const N = 6, g = 0.72;
-      const total = (1 - Math.pow(g, N)) / (1 - g);
+      const fracs = [0.25, 0.25, 0.125, 0.125, 0.0625, 0.0625, 0.0625, 0.0625];
       let acc = 0;
-      for (let i = 0; i < N; i++) {
-        sweepBounds.push(Math.round((acc / total) * extFrames));
-        acc += Math.pow(g, i);
-        const t = i / (N - 1);
+      for (let i = 0; i < fracs.length; i++) {
+        sweepBounds.push(Math.round(acc * nFrames));
+        acc += fracs[i]!;
+        const t = i / (fracs.length - 1);
         sweepRates.push(dir === "up" ? Math.pow(2, t) : Math.pow(2, -0.85 * t));
       }
-      sweepBounds.push(extFrames);
+      sweepBounds.push(extFrames); // the crossfade tail rides the last repeat
     }
     let gatePeriod = 0, gateEdge = 0;
     if (fx === "gater") {
@@ -222,12 +223,29 @@ export function buildCollageLoop(
       filterF0 = 250 * Math.pow(2, rng() * 4); // 250 Hz .. 4 kHz
       filterF1 = 250 * Math.pow(2, rng() * 4);
     }
-    let combDelay = 0;
+    // Tonal delay: a pitched comb tuned to a note between ~110 and ~440 Hz.
+    // "Motion" glides the delay length across the slice, bending the tone:
+    // rise = octave up, fall = octave down, wobble = an LFO around the note.
+    let combD0 = 0;
+    let combMotion = "static";
+    let combWobbleHz = 0;
     const COMB_FB = 0.72;
     if (fx === "tonaldelay") {
-      // A pitched comb: delay tuned to a note between ~110 and ~440 Hz.
       const f = 110 * Math.pow(2, Math.floor(rng() * 25) / 12);
-      combDelay = Math.max(8, Math.round(OUTPUT_SAMPLE_RATE / f));
+      combD0 = Math.max(8, Math.round(OUTPUT_SAMPLE_RATE / f));
+      combMotion = opts.tonaldelay.motion === "random"
+        ? (["static", "rise", "fall", "wobble"] as const)[Math.floor(rng() * 4)]!
+        : opts.tonaldelay.motion;
+      if (combMotion === "wobble") combWobbleHz = 2 + rng() * 4; // 2..6 Hz vibrato
+    }
+    // Tape stop: where in the slice the tape reaches standstill.
+    let tapestopT = extFrames;
+    if (fx === "tapestop") {
+      const speed = opts.tapestop.speed === "random"
+        ? (["fast", "medium", "slow"] as const)[Math.floor(rng() * 3)]!
+        : opts.tapestop.speed;
+      const frac = speed === "fast" ? 0.4 : speed === "medium" ? 0.7 : 1;
+      tapestopT = Math.max(1, Math.floor(extFrames * frac));
     }
     // Auto-pan: alternate slots left/right by the pan amount (equal-power).
     let gainL = 1, gainR = 1;
@@ -244,7 +262,7 @@ export function buildCollageLoop(
       const outCh = out[c]!;
       const panGain = c === 0 ? gainL : gainR;
       let lpState = 0; // one-pole filter state (per channel, per slice)
-      const comb = combDelay ? new Float32Array(extFrames) : null;
+      const comb = combD0 ? new Float32Array(extFrames) : null;
 
       for (let k = 0; k < extFrames; k++) {
         // Sample-and-hold for the rate-crush half of the bitcrusher.
@@ -260,8 +278,10 @@ export function buildCollageLoop(
           while (j < sweepRates.length - 1 && kRead >= sweepBounds[j + 1]!) j++;
           u = (kRead - sweepBounds[j]!) * sweepRates[j]!;
         } else if (fx === "tapestop") {
-          // Rate falls linearly 1 -> 0; read position is its integral.
-          u = kRead - kRead * kRead * 0.5 * invExt;
+          // Rate falls linearly 1 -> 0 by frame tapestopT; the read position
+          // is its integral, frozen (and silenced) once the tape stands still.
+          const kk = Math.min(kRead, tapestopT);
+          u = kk - (kk * kk * 0.5) / tapestopT;
         } else if (fx === "scratch") {
           if (scrubCycles) {
             // Triangle scrub: forward/backward sweeps across the slice.
@@ -296,7 +316,23 @@ export function buildCollageLoop(
           v = filterLp ? lpState : v - lpState;
         }
         if (comb) {
-          const fbIn = k >= combDelay ? comb[k - combDelay]! : 0;
+          // Variable delay length = pitch motion (fractional read, interpolated).
+          let D = combD0;
+          if (combMotion === "rise") D = combD0 * Math.pow(2, -k * invExt);
+          else if (combMotion === "fall") D = combD0 * Math.pow(2, k * invExt);
+          else if (combMotion === "wobble") {
+            D = combD0 * Math.pow(2,
+              0.25 * Math.sin((2 * Math.PI * combWobbleHz * k) / OUTPUT_SAMPLE_RATE));
+          }
+          const idx = k - D;
+          let fbIn = 0;
+          if (idx >= 0) {
+            const i1 = Math.floor(idx);
+            const fr = idx - i1;
+            const a = comb[i1]!;
+            const b = i1 + 1 < k ? comb[i1 + 1]! : a;
+            fbIn = a * (1 - fr) + b * fr;
+          }
           const y = v + COMB_FB * fbIn;
           comb[k] = y;
           v = 0.35 * v + 0.65 * y;
@@ -305,6 +341,7 @@ export function buildCollageLoop(
         // Equal-power fade-in/out over the extended region (overlap-add with
         // the neighbouring slots when crossfading).
         let gain = panGain;
+        if (fx === "tapestop" && kRead >= tapestopT) gain = 0; // tape stands still
         if (k < fadeLen) gain *= Math.sin(((k + 1) / fadeLen) * (Math.PI / 2));
         const fromEnd = extFrames - k;
         if (fromEnd <= fadeLen) gain *= Math.sin((fromEnd / fadeLen) * (Math.PI / 2));

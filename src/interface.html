@@ -417,31 +417,50 @@
 
   // ---- FX accordion: every effect is one row (toggle · name · chance ·
   // ▾ options); the ▾ opens a dropdown with that effect's extra settings. ----
+  // Every effect gets its OWN color — the same hues color the clips in
+  // COLOR CLIPS mode, so UI and Arrangement speak the same language.
   const FX_DEFS = [
-    { key: "reverse",    label: "REVERSE",       acc: "var(--blue)" },
-    { key: "retrigger",  label: "RETRIGGER",     acc: "var(--pink)" },
-    { key: "sweep",      label: "STUTTER SWEEP", acc: "var(--purple)",
+    { key: "reverse",    label: "REVERSE",       acc: "#2f9bff",
+      tip: "Slice plays backwards. Stacks on top of any other effect." },
+    { key: "retrigger",  label: "RETRIGGER",     acc: "#ff4d8d",
+      tip: "Stutter: repeats the first 1/2, 1/4 or 1/8 of the slice." },
+    { key: "sweep",      label: "STUTTER SWEEP", acc: "#9b5de5",
+      tip: "Grid-locked repeats that speed up while gliding in pitch.",
       opts: { prop: "dir", choices: [["up", "PITCH UP"], ["down", "PITCH DOWN"], ["random", "RND"]] } },
-    { key: "tapestop",   label: "TAPE STOP",     acc: "var(--teal)" },
-    { key: "scratch",    label: "SCRATCH",       acc: "var(--orange)",
+    { key: "tapestop",   label: "TAPE STOP",     acc: "#00c6ae",
+      tip: "Tape brakes to standstill: fast = mid-slice, slow = whole slice.",
+      opts: { prop: "speed", choices: [["fast", "FAST"], ["medium", "MED"], ["slow", "SLOW"], ["random", "RND"]] } },
+    { key: "scratch",    label: "SCRATCH",       acc: "#ff8c1a",
+      tip: "Vinyl scrub (back & forth) or spinback (accelerating rewind).",
       opts: { prop: "mode", choices: [["scrub", "SCRUB"], ["spinback", "SPINBACK"], ["random", "RND"]] } },
-    { key: "gater",      label: "GATER",         acc: "var(--yellow)",
+    { key: "gater",      label: "GATER",         acc: "#ffd600",
+      tip: "Rhythmic on/off gate inside the slice (50% duty).",
       opts: { prop: "gates", choices: [[4, "4 GATES"], [8, "8 GATES"], [0, "RND"]] } },
-    { key: "repitch",    label: "REPITCH",       acc: "var(--blue)",
+    { key: "repitch",    label: "REPITCH",       acc: "#2fd04c",
+      tip: "Varispeed: octave up (plays twice) or octave down (half heard).",
       opts: { prop: "dir", choices: [["up", "OCT UP"], ["down", "OCT DOWN"], ["both", "BOTH"]] } },
-    { key: "bitcrush",   label: "BITCRUSH",      acc: "var(--orange)",
+    { key: "bitcrush",   label: "BITCRUSH",      acc: "#d64545",
+      tip: "Lo-fi: bit-depth + sample-rate crush.",
       opts: { prop: "amount", choices: [["light", "LIGHT"], ["medium", "MED"], ["hard", "HARD"], ["random", "RND"]] } },
-    { key: "filter",     label: "FILTER SWEEP",  acc: "var(--teal)",
+    { key: "filter",     label: "FILTER SWEEP",  acc: "#a3e635",
+      tip: "Low- or high-pass whose cutoff glides across the slice.",
       opts: { prop: "type", choices: [["lp", "LOW-PASS"], ["hp", "HIGH-PASS"], ["random", "RND"]] } },
-    { key: "tonaldelay", label: "TONAL DELAY",   acc: "var(--purple)" },
-    { key: "dropout",    label: "DROPOUT",       acc: "var(--pink)" },
+    { key: "tonaldelay", label: "TONAL DELAY",   acc: "#f07ddb",
+      tip: "Pitched comb delay ringing at a random note; motion bends the tone.",
+      opts: { prop: "motion", choices: [["static", "STATIC"], ["rise", "RISE"], ["fall", "FALL"], ["wobble", "WOBBLE"], ["random", "RND"]] } },
+    { key: "dropout",    label: "DROPOUT",       acc: "#8a8f98",
+      tip: "The slot stays silent — sparse, choppy grooves." },
   ];
   const GROOVE_DEFS = [
-    { key: "autopan", label: "AUTO-PAN", acc: "var(--teal)", prop: "amount" },
-    { key: "swing",   label: "SWING",    acc: "var(--pink)", prop: "amount" },
-    { key: "endfill", label: "END FILL", acc: "var(--yellow)", prop: "chance" },
-    { key: "colorclips", label: "COLOR CLIPS", acc: "var(--purple)", toggleOnly: true,
-      hint: "ONE CLIP PER CHOP, COLORED BY ITS FX" },
+    { key: "autopan", label: "AUTO-PAN", acc: "#22d3ee", prop: "amount",
+      tip: "Alternating slots pan left/right by this width." },
+    { key: "swing",   label: "SWING",    acc: "#c47f2e", prop: "amount",
+      tip: "Odd slots drag behind the grid." },
+    { key: "endfill", label: "END FILL", acc: "#ff3355", prop: "chance",
+      tip: "The loop's final beat becomes an accelerating roll." },
+    { key: "colorclips", label: "COLOR CLIPS", acc: "#6366f1", toggleOnly: true,
+      hint: "ONE CLIP PER CHOP, COLORED BY ITS FX",
+      tip: "Place one clip per chop, colored like these rows." },
   ];
   const fxSyncFns = [];
   function buildFxRow(def, container) {
@@ -450,6 +469,7 @@
     const row = document.createElement("div");
     row.className = "fxRow";
     row.style.setProperty("--acc", def.acc);
+    if (def.tip) row.title = def.tip;
     row.innerHTML =
       (def.noToggle ? '<div style="width:40px;flex:0 0 auto"></div>' : '<div class="fxTog"></div>') +
       '<div class="fxName">' + def.label + '</div>' +

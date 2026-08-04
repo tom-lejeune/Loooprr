@@ -26,13 +26,13 @@ function allFxOff() {
     reverse: { on: false, chance: 0 },
     retrigger: { on: false, chance: 0 },
     sweep: { on: false, chance: 0, dir: "random" as const },
-    tapestop: { on: false, chance: 0 },
+    tapestop: { on: false, chance: 0, speed: "random" as const },
     scratch: { on: false, chance: 0, mode: "random" as const },
     gater: { on: false, chance: 0, gates: 0 as const },
     repitch: { on: false, chance: 0, dir: "both" as const },
     bitcrush: { on: false, chance: 0, amount: "medium" as const },
     filter: { on: false, chance: 0, type: "random" as const },
-    tonaldelay: { on: false, chance: 0 },
+    tonaldelay: { on: false, chance: 0, motion: "random" as const },
     dropout: { on: false, chance: 0 },
     autopan: { on: false, amount: 0 },
     swing: { on: false, amount: 0 },
@@ -47,13 +47,13 @@ function allFxMax() {
     reverse: { on: true, chance: 1 },
     retrigger: { on: true, chance: 1 },
     sweep: { on: true, chance: 1, dir: "random" as const },
-    tapestop: { on: true, chance: 1 },
+    tapestop: { on: true, chance: 1, speed: "random" as const },
     scratch: { on: true, chance: 1, mode: "random" as const },
     gater: { on: true, chance: 1, gates: 0 as const },
     repitch: { on: true, chance: 1, dir: "both" as const },
     bitcrush: { on: true, chance: 1, amount: "random" as const },
     filter: { on: true, chance: 1, type: "random" as const },
-    tonaldelay: { on: true, chance: 1 },
+    tonaldelay: { on: true, chance: 1, motion: "random" as const },
     dropout: { on: true, chance: 0.3 },
     autopan: { on: true, amount: 1 },
     swing: { on: true, amount: 0.6 },
@@ -371,6 +371,12 @@ test("sanitizeParams clamps and defaults bad nested input", () => {
   assert.equal(sanitizeParams({ swing: { amount: 0 } }).swing.on, false);
   assert.equal(sanitizeParams({}).colorclips.on, false);
   assert.equal(sanitizeParams({ colorclips: { on: true } }).colorclips.on, true);
+  // New per-effect options default and validate.
+  assert.equal(sanitizeParams({}).tapestop.speed, DEFAULT_PARAMS.tapestop.speed);
+  assert.equal(sanitizeParams({ tapestop: { on: true, chance: 0.5, speed: "fast" } }).tapestop.speed, "fast");
+  assert.equal(sanitizeParams({ tapestop: { on: true, chance: 0.5, speed: "warp9" } }).tapestop.speed, DEFAULT_PARAMS.tapestop.speed);
+  assert.equal(sanitizeParams({ tonaldelay: { on: true, chance: 0.5, motion: "wobble" } }).tonaldelay.motion, "wobble");
+  assert.equal(sanitizeParams({ tonaldelay: { on: true, chance: 0.5, motion: "spin" } }).tonaldelay.motion, DEFAULT_PARAMS.tonaldelay.motion);
   const round = sanitizeParams(p);
   assert.deepEqual(round, p);
 });
