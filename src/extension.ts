@@ -41,7 +41,7 @@ const SETTINGS_FILE = "settings.json";
 
 /** Design size of the settings dialog; the real window is this times uiScale. */
 const DIALOG_W = 480;
-const DIALOG_H = 1040;
+const DIALOG_H = 1140;
 
 /**
  * Tiny splash dialog that reports the screen's available size and closes

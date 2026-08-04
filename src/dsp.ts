@@ -1,18 +1,21 @@
 /**
- * Loop Collage DSP — pure functions, no host imports.
+ * Loooprr DSP — pure functions, no host imports.
  *
  * Grid-locked collage: the source selection is divided into N equal,
- * grid-aligned slices (N = 4, 8 or 16 — "slice length" is 1/4, 1/8 or 1/16 of
- * the sample being sliced). The output loop is walked slot-by-slot on that
- * same grid, and every slot is filled with a randomly chosen WHOLE slice of a
- * source — never a random sample offset — so the chops keep the source's
- * rhythmic feel. Per slot the RNG decides reverse and bitcrush; adjacent slots
- * are joined with equal-power crossfades that wrap around the loop end, so the
- * result loops seamlessly. Everything is driven by one seeded RNG: same
- * sources + params + variation index -> bit-identical output.
+ * grid-aligned slices (N = 4, 8 or 16). The output loop is walked
+ * slot-by-slot on that grid; every slot gets a randomly chosen WHOLE source
+ * slice, so chops keep the source's rhythmic feel.
+ *
+ * Slice FX (at most ONE per slot — the chances compete; reverse stacks on
+ * top): retrigger, stutter sweep, tape stop, scratch/spinback, gater,
+ * repitch, bitcrush, filter sweep, tonal delay, dropout.
+ * Groove & space (applied on top): auto-pan, swing, end fill.
+ *
+ * Everything is driven by one seeded mulberry32 RNG: same sources + params +
+ * variation index -> bit-identical output.
  */
 
-import type { BitcrushAmount, CollageParams } from "./params.js";
+import type { ChanceFx, CollageParams } from "./params.js";
 
 export interface AudioBuffers {
   channels: Float32Array[];
@@ -59,17 +62,6 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-function resolveCrush(
-  amount: BitcrushAmount,
-  rng: () => number,
-): { bits: number; hold: number } {
-  if (amount === "random") {
-    const keys = ["light", "medium", "hard"] as const;
-    return CRUSH_CONFIGS[keys[Math.floor(rng() * keys.length)]!];
-  }
-  return CRUSH_CONFIGS[amount];
-}
-
 export interface CollageOptions extends CollageParams {
   /** Live's current tempo in BPM. */
   tempo: number;
@@ -78,6 +70,13 @@ export interface CollageOptions extends CollageParams {
   /** Which variation to generate (offsets the seed deterministically). */
   variationIndex: number;
 }
+
+type SliceFx =
+  | "retrigger" | "sweep" | "tapestop" | "scratch" | "gater"
+  | "repitch" | "bitcrush" | "filter" | "tonaldelay" | "dropout";
+
+/** Quadratic chance curve: keeps low percentages genuinely rare per loop. */
+const sq = (p: number) => p * p;
 
 /**
  * Assemble one collage-loop variation from the given sources.
@@ -102,71 +101,135 @@ export function buildCollageLoop(
   const requestedXf = Math.round((xfMs / 1000) * OUTPUT_SAMPLE_RATE);
 
   let posBeats = 0;
+  let slotIdx = 0;
   while (posBeats < loopBeats - 1e-9) {
-    // Slice length = an exact fraction of the source sample, so chops stay on
-    // the source's own grid. All options are multiples of sourceBeats/16, so
-    // output positions stay grid-locked too.
     const divisions =
       opts.sliceLength === "random"
         ? RANDOM_DIVISION_POOL[Math.floor(rng() * RANDOM_DIVISION_POOL.length)]!
         : SLICE_DIVISIONS[opts.sliceLength];
     const sliceBeats = Math.min(opts.sourceBeats / divisions, loopBeats - posBeats);
 
-    const startFrame = Math.round(posBeats * secPerBeat * OUTPUT_SAMPLE_RATE);
+    const baseStart = Math.round(posBeats * secPerBeat * OUTPUT_SAMPLE_RATE);
     const endFrame = Math.round((posBeats + sliceBeats) * secPerBeat * OUTPUT_SAMPLE_RATE);
+    // Swing: odd slots start late (up to a third of the slot), shortening them.
+    let startFrame = baseStart;
+    if (opts.swing.amount > 0 && slotIdx % 2 === 1) {
+      startFrame = baseStart + Math.floor((endFrame - baseStart) * 0.33 * opts.swing.amount);
+    }
     const nFrames = endFrame - startFrame;
-    if (nFrames <= 0) break;
-    // Crossfade tail extends past the slot; cap so fades never overlap themselves.
+    if (nFrames <= 1) { posBeats += sliceBeats; slotIdx++; continue; }
     const xf = Math.max(Math.min(requestedXf, Math.floor(nFrames / 2)), 0);
     const fadeLen = xf > 0 ? xf : Math.min(DECLICK_FRAMES, Math.floor(nFrames / 2));
-    const extFrames = nFrames + xf; // slot + fade-out tail (overlaps next slot's fade-in)
+    const extFrames = nFrames + xf;
 
-    // Pick a random source and a random WHOLE slice index on its grid.
+    // Random source fragment: a WHOLE slice on the source's own grid.
     const src = usable[Math.floor(rng() * usable.length)]!;
     const ratio = src.sampleRate / OUTPUT_SAMPLE_RATE;
     const srcLen = src.channels[0]!.length;
     const srcSliceFrames = (opts.sourceBeats / divisions) * secPerBeat * src.sampleRate;
     const availSlices = Math.max(1, Math.min(divisions, Math.floor(srcLen / srcSliceFrames)));
-    const sliceIndex = Math.floor(rng() * availSlices);
-    const srcStart = Math.round(sliceIndex * srcSliceFrames);
+    const srcStart = Math.round(Math.floor(rng() * availSlices) * srcSliceFrames);
 
-    // Glitch FX selection — Glitch2-style: at most ONE effect per slice (the
-    // chances compete; if several hit, one of the hits is picked at random).
-    // Reverse is the exception: it stacks on top of anything. All chances use
-    // a quadratic curve: with many slots per loop even 10% linear would hit
-    // almost every loop, squaring keeps the low end genuinely rare
-    // (10% -> 1%, 50% -> 25%) while 100% still always fires.
-    const sq = (p: number) => p * p;
-    const candidates: ("retrigger" | "tapestop" | "gater" | "repitch" | "bitcrush")[] = [];
-    if (rng() < sq(opts.retriggerChance)) candidates.push("retrigger");
-    if (rng() < sq(opts.tapestopChance)) candidates.push("tapestop");
-    if (rng() < sq(opts.gaterChance)) candidates.push("gater");
-    if (rng() < sq(opts.repitchChance)) candidates.push("repitch");
-    if (rng() < opts.bitcrushChance) candidates.push("bitcrush");
-    const fx = candidates.length
-      ? candidates[Math.floor(rng() * candidates.length)]!
-      : null;
-    const reversed = rng() < sq(opts.reverseChance);
+    // FX pool — chances compete, one winner per slot. Bitcrush keeps its
+    // historical linear curve; every other chance is quadratic.
+    const pool: SliceFx[] = [];
+    const rollQ = (f: ChanceFx) => f.on && rng() < sq(f.chance);
+    if (rollQ(opts.retrigger)) pool.push("retrigger");
+    if (rollQ(opts.sweep)) pool.push("sweep");
+    if (rollQ(opts.tapestop)) pool.push("tapestop");
+    if (rollQ(opts.scratch)) pool.push("scratch");
+    if (rollQ(opts.gater)) pool.push("gater");
+    if (rollQ(opts.repitch)) pool.push("repitch");
+    if (opts.bitcrush.on && rng() < opts.bitcrush.chance) pool.push("bitcrush");
+    if (rollQ(opts.filter)) pool.push("filter");
+    if (rollQ(opts.tonaldelay)) pool.push("tonaldelay");
+    if (rollQ(opts.dropout)) pool.push("dropout");
+    const fx: SliceFx | null = pool.length ? pool[Math.floor(rng() * pool.length)]! : null;
+    const reversed = opts.reverse.on && rng() < sq(opts.reverse.chance);
 
-    // Per-effect parameters, rolled deterministically from the same RNG.
-    const crush = fx === "bitcrush" ? resolveCrush(opts.bitcrushAmount, rng) : null;
-    const levels = crush ? Math.pow(2, crush.bits - 1) : 0;
-    // Retrigger: repeat the first 1/2, 1/4 or 1/8 of the slice.
-    const retrigChunk =
-      fx === "retrigger"
-        ? Math.max(1, Math.round(nFrames / [2, 4, 8][Math.floor(rng() * 3)]!))
-        : 0;
-    // Gater: 4 or 8 gates per slice, 50% duty, with short declick ramps.
-    const gatePeriod =
-      fx === "gater" ? Math.max(2, Math.floor(nFrames / (rng() < 0.5 ? 4 : 8))) : 0;
-    const gateEdge = gatePeriod ? Math.min(64, gatePeriod * 0.1) : 0;
-    // Repitch: octave down (half speed) or up (double speed, plays twice).
-    const repitchRate = fx === "repitch" ? (rng() < 0.5 ? 0.5 : 2) : 1;
+    if (fx === "dropout") {
+      // Intentional hole: the previous slice's crossfade tail decays into it.
+      posBeats += sliceBeats; slotIdx++; continue;
+    }
+
+    // ---- Per-effect parameters, rolled deterministically. ----
+    let crush: { bits: number; hold: number } | null = null;
+    let levels = 0;
+    if (fx === "bitcrush") {
+      const amount = opts.bitcrush.amount === "random"
+        ? (["light", "medium", "hard"] as const)[Math.floor(rng() * 3)]!
+        : opts.bitcrush.amount;
+      crush = CRUSH_CONFIGS[amount];
+      levels = Math.pow(2, crush.bits - 1);
+    }
+    const retrigChunk = fx === "retrigger"
+      ? Math.max(1, Math.round(nFrames / [2, 4, 8][Math.floor(rng() * 3)]!))
+      : 0;
+    // Stutter sweep: repeats shrink geometrically; pitch glides up or down.
+    let sweepBounds: number[] = [];
+    let sweepRates: number[] = [];
+    if (fx === "sweep") {
+      const dir = opts.sweep.dir === "random" ? (rng() < 0.5 ? "up" : "down") : opts.sweep.dir;
+      const N = 6, g = 0.72;
+      const total = (1 - Math.pow(g, N)) / (1 - g);
+      let acc = 0;
+      for (let i = 0; i < N; i++) {
+        sweepBounds.push(Math.round((acc / total) * extFrames));
+        acc += Math.pow(g, i);
+        const t = i / (N - 1);
+        sweepRates.push(dir === "up" ? Math.pow(2, t) : Math.pow(2, -0.85 * t));
+      }
+      sweepBounds.push(extFrames);
+    }
+    let gatePeriod = 0, gateEdge = 0;
+    if (fx === "gater") {
+      const gates = opts.gater.gates || (rng() < 0.5 ? 4 : 8);
+      gatePeriod = Math.max(2, Math.floor(nFrames / gates));
+      gateEdge = Math.min(64, gatePeriod * 0.1);
+    }
+    let repitchRate = 1;
+    if (fx === "repitch") {
+      repitchRate = opts.repitch.dir === "up" ? 2
+        : opts.repitch.dir === "down" ? 0.5
+        : rng() < 0.5 ? 0.5 : 2;
+    }
+    let scrubCycles = 0, spinK0 = 0;
+    if (fx === "scratch") {
+      const mode = opts.scratch.mode === "random"
+        ? (rng() < 0.5 ? "scrub" : "spinback")
+        : opts.scratch.mode;
+      if (mode === "scrub") scrubCycles = 2 + Math.floor(rng() * 2);
+      else spinK0 = Math.floor(extFrames * 0.45);
+    }
+    let filterLp = true, filterF0 = 0, filterF1 = 0;
+    if (fx === "filter") {
+      filterLp = opts.filter.type === "random" ? rng() < 0.5 : opts.filter.type === "lp";
+      filterF0 = 250 * Math.pow(2, rng() * 4); // 250 Hz .. 4 kHz
+      filterF1 = 250 * Math.pow(2, rng() * 4);
+    }
+    let combDelay = 0;
+    const COMB_FB = 0.72;
+    if (fx === "tonaldelay") {
+      // A pitched comb: delay tuned to a note between ~110 and ~440 Hz.
+      const f = 110 * Math.pow(2, Math.floor(rng() * 25) / 12);
+      combDelay = Math.max(8, Math.round(OUTPUT_SAMPLE_RATE / f));
+    }
+    // Auto-pan: alternate slots left/right by the pan amount (equal-power).
+    let gainL = 1, gainR = 1;
+    if (opts.autopan.on && opts.autopan.amount > 0) {
+      const pan = (slotIdx % 2 === 0 ? -1 : 1) * opts.autopan.amount; // -1..1
+      const t = (pan + 1) / 2;
+      gainL = Math.cos((t * Math.PI) / 2) * 1.32;
+      gainR = Math.sin((t * Math.PI) / 2) * 1.32;
+    }
     const invExt = 1 / extFrames;
 
     for (let c = 0; c < OUTPUT_CHANNELS; c++) {
       const srcCh = src.channels[Math.min(c, src.channels.length - 1)]!;
       const outCh = out[c]!;
+      const panGain = c === 0 ? gainL : gainR;
+      let lpState = 0; // one-pole filter state (per channel, per slice)
+      const comb = combDelay ? new Float32Array(extFrames) : null;
 
       for (let k = 0; k < extFrames; k++) {
         // Sample-and-hold for the rate-crush half of the bitcrusher.
@@ -176,33 +239,60 @@ export function buildCollageLoop(
         let u: number;
         if (fx === "retrigger") {
           u = kRead % retrigChunk;
+        } else if (fx === "sweep") {
+          // Find the repeat this frame belongs to (few repeats; linear scan).
+          let j = 0;
+          while (j < sweepRates.length - 1 && kRead >= sweepBounds[j + 1]!) j++;
+          u = (kRead - sweepBounds[j]!) * sweepRates[j]!;
         } else if (fx === "tapestop") {
-          // Playback rate falls linearly 1 -> 0 over the slice; the read
-          // position is its integral, freezing at the end (pitch drops away).
+          // Rate falls linearly 1 -> 0; read position is its integral.
           u = kRead - kRead * kRead * 0.5 * invExt;
+        } else if (fx === "scratch") {
+          if (scrubCycles) {
+            // Triangle scrub: forward/backward sweeps across the slice.
+            const ph = (kRead * scrubCycles) / extFrames;
+            u = 2 * Math.abs(ph - Math.floor(ph + 0.5)) * (nFrames - 1);
+          } else {
+            // Spinback: play normally, then rewind with accelerating speed.
+            u = kRead < spinK0
+              ? kRead
+              : spinK0 - (kRead - spinK0) * (1 + (2.5 * (kRead - spinK0)) / (extFrames - spinK0));
+          }
         } else if (fx === "repitch") {
           u = (kRead * repitchRate) % nFrames;
         } else {
           u = kRead;
         }
         // Reverse flips within the slot (reads past either end are clamped).
-        const kDir = reversed ? nFrames - 1 - u : u;
-        const srcPos = srcStart + kDir * ratio;
+        if (reversed) u = nFrames - 1 - u;
+
+        const srcPos = srcStart + u * ratio;
         const i0 = Math.max(0, Math.min(Math.floor(srcPos), srcLen - 2));
         const frac = Math.max(0, Math.min(srcPos - i0, 1));
         let v = srcCh[i0]! * (1 - frac) + srcCh[i0 + 1]! * frac;
 
         if (crush) v = Math.round(v * levels) / levels;
 
-        // Equal-power fade-in over [0, fadeLen) and fade-out over the last fadeLen
-        // of the extended region. With xf > 0 the fades of adjacent slots
-        // overlap-add to unity power.
-        let gain = 1;
+        if (fx === "filter") {
+          // One-pole with the cutoff gliding f0 -> f1 across the slice.
+          const fc = filterF0 * Math.pow(filterF1 / filterF0, k * invExt);
+          const a = 1 - Math.exp((-2 * Math.PI * fc) / OUTPUT_SAMPLE_RATE);
+          lpState += a * (v - lpState);
+          v = filterLp ? lpState : v - lpState;
+        }
+        if (comb) {
+          const fbIn = k >= combDelay ? comb[k - combDelay]! : 0;
+          const y = v + COMB_FB * fbIn;
+          comb[k] = y;
+          v = 0.35 * v + 0.65 * y;
+        }
+
+        // Equal-power fade-in/out over the extended region (overlap-add with
+        // the neighbouring slots when crossfading).
+        let gain = panGain;
         if (k < fadeLen) gain *= Math.sin(((k + 1) / fadeLen) * (Math.PI / 2));
         const fromEnd = extFrames - k;
         if (fromEnd <= fadeLen) gain *= Math.sin((fromEnd / fadeLen) * (Math.PI / 2));
-
-        // Gater: 50%-duty square with short ramps at the segment edges.
         if (gatePeriod) {
           const ph = (k % gatePeriod) / gatePeriod;
           if (ph < 0.5) {
@@ -219,6 +309,12 @@ export function buildCollageLoop(
     }
 
     posBeats += sliceBeats;
+    slotIdx++;
+  }
+
+  // ---- End fill: replace the loop's final beat with an accelerating roll. ----
+  if (opts.endfill.on && rng() < opts.endfill.chance) {
+    applyEndFill(out, usable, rng, opts, secPerBeat, loopBeats, totalFrames);
   }
 
   // Peak-normalize to -1 dBFS.
@@ -237,4 +333,57 @@ export function buildCollageLoop(
   }
 
   return { channels: out, sampleRate: OUTPUT_SAMPLE_RATE };
+}
+
+/** Snare-roll style fill: subdivisions double toward the loop end. */
+function applyEndFill(
+  out: Float32Array[],
+  usable: AudioBuffers[],
+  rng: () => number,
+  opts: CollageOptions,
+  secPerBeat: number,
+  loopBeats: number,
+  totalFrames: number,
+): void {
+  const fillBeats = Math.min(1, loopBeats / 4);
+  const fillFrames = Math.round(fillBeats * secPerBeat * OUTPUT_SAMPLE_RATE);
+  const fillStart = totalFrames - fillFrames;
+
+  // One grid slice (a 1/16 of the source) is the roll's ammunition.
+  const src = usable[Math.floor(rng() * usable.length)]!;
+  const ratio = src.sampleRate / OUTPUT_SAMPLE_RATE;
+  const srcLen = src.channels[0]!.length;
+  const srcSliceFrames = (opts.sourceBeats / 16) * secPerBeat * src.sampleRate;
+  const avail = Math.max(1, Math.min(16, Math.floor(srcLen / srcSliceFrames)));
+  const srcStart = Math.round(Math.floor(rng() * avail) * srcSliceFrames);
+  const risePitch = rng() < 0.5; // half the fills also climb in pitch
+
+  // Chunk pattern: halves shrink toward the end (1/4 1/4 1/8 1/8 1/16 x4).
+  const fracs = [0.25, 0.25, 0.125, 0.125, 0.0625, 0.0625, 0.0625, 0.0625];
+  const fade = 24;
+
+  for (let c = 0; c < out.length; c++) {
+    const srcCh = src.channels[Math.min(c, src.channels.length - 1)]!;
+    const outCh = out[c]!;
+    for (let i = fillStart; i < totalFrames; i++) outCh[i] = 0;
+
+    let chunkStart = 0;
+    fracs.forEach((frac, fi) => {
+      const chunkFrames = Math.round(frac * fillFrames);
+      const rate = risePitch ? 1 + 0.4 * (fi / (fracs.length - 1)) : 1;
+      const gain = 0.7 + 0.3 * (fi / (fracs.length - 1));
+      for (let k = 0; k < chunkFrames; k++) {
+        const srcPos = srcStart + k * rate * ratio;
+        const i0 = Math.max(0, Math.min(Math.floor(srcPos), srcLen - 2));
+        const frac2 = Math.max(0, Math.min(srcPos - i0, 1));
+        let v = srcCh[i0]! * (1 - frac2) + srcCh[i0 + 1]! * frac2;
+        let g = gain;
+        if (k < fade) g *= k / fade;
+        if (chunkFrames - k < fade) g *= (chunkFrames - k) / fade;
+        const idx = fillStart + chunkStart + k;
+        if (idx < totalFrames) outCh[idx] = v * g;
+      }
+      chunkStart += chunkFrames;
+    });
+  }
 }

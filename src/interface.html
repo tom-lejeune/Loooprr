@@ -93,31 +93,63 @@
   [data-group="bitcrushAmount"] .seg.on { background: var(--orange); }
   [data-group="variations"] .seg.on { background: var(--purple); color: #fff; }
 
-  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .sliderRow { display: flex; align-items: center; gap: 12px; }
   input[type=range] {
-    flex: 1; appearance: none; height: 12px;
+    flex: 1; appearance: none; height: 10px;
     background: #fff; border: 3px solid var(--ink); border-radius: 7px;
     outline: none;
   }
   input[type=range]::-webkit-slider-thumb {
-    appearance: none; width: 24px; height: 24px; border-radius: 50%;
+    appearance: none; width: 20px; height: 20px; border-radius: 50%;
     border: 3px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
-    cursor: pointer;
+    cursor: pointer; background: var(--acc, var(--yellow));
   }
-  #reverseChance::-webkit-slider-thumb { background: var(--blue); }
-  #bitcrushChance::-webkit-slider-thumb { background: var(--orange); }
-  #retriggerChance::-webkit-slider-thumb { background: var(--pink); }
-  #tapestopChance::-webkit-slider-thumb { background: var(--purple); }
-  #gaterChance::-webkit-slider-thumb { background: var(--teal); }
-  #repitchChance::-webkit-slider-thumb { background: var(--yellow); }
-  .sliders .label { margin: 14px 0 7px; }
   .pct {
-    min-width: 46px; text-align: center;
+    min-width: 42px; text-align: center;
     background: var(--ink); color: var(--paper);
-    font-size: 12px; font-weight: 900; padding: 4px 0;
+    font-size: 11px; font-weight: 900; padding: 3px 0;
     border-radius: 6px;
   }
+
+  /* FX accordion: one compact row per effect, ▾ opens its options panel. */
+  .fxRow {
+    display: flex; align-items: center; gap: 10px;
+    background: #fff; border: 3px solid var(--ink); border-radius: 9px;
+    box-shadow: 2px 2px 0 var(--ink);
+    padding: 6px 10px; margin-bottom: 8px;
+  }
+  .fxTog {
+    width: 40px; height: 22px; flex: 0 0 auto; position: relative;
+    background: #ddd; border: 3px solid var(--ink); border-radius: 12px;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .fxTog::after {
+    content: ""; position: absolute; top: 1px; left: 1px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--ink); transition: left 0.1s;
+  }
+  .fxRow.on .fxTog { background: var(--acc, var(--yellow)); }
+  .fxRow.on .fxTog::after { left: 19px; }
+  .fxName {
+    width: 118px; flex: 0 0 auto;
+    font-size: 11px; font-weight: 900; letter-spacing: 0.05em;
+  }
+  .fxRow:not(.on) .fxName, .fxRow:not(.on) input, .fxRow:not(.on) .pct { opacity: 0.4; }
+  .fxChev {
+    width: 24px; height: 24px; flex: 0 0 auto; display: flex;
+    align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 900; cursor: pointer;
+    border: 3px solid var(--ink); border-radius: 7px; background: #fff;
+    transition: transform 0.12s;
+  }
+  .fxRow.expanded .fxChev { transform: rotate(180deg); background: var(--acc, var(--yellow)); }
+  .fxPanel {
+    display: none; margin: -4px 0 8px; padding: 10px 12px;
+    border: 3px dashed var(--ink); border-radius: 9px;
+  }
+  .fxPanel.open { display: block; }
+  .fxPanel .row { gap: 8px; }
+  .fxPanel .seg { padding: 8px 0; font-size: 11px; }
+  .fxPanel .seg.on { background: var(--acc, var(--yellow)); }
 
   .seedRow { display: flex; align-items: stretch; gap: 12px; }
   .seedVal {
@@ -292,58 +324,11 @@
     <div class="seg" data-value="long">LONG</div>
   </div>
 
-  <div class="sliders">
-    <div>
-      <div class="label"><span class="chip round" style="background:var(--blue)"></span>REVERSE</div>
-      <div class="sliderRow">
-        <input type="range" id="reverseChance" min="0" max="100" step="1">
-        <div class="pct" id="reverseChancePct"></div>
-      </div>
-    </div>
-    <div>
-      <div class="label"><span class="chip round" style="background:var(--orange)"></span>BITCRUSH</div>
-      <div class="sliderRow">
-        <input type="range" id="bitcrushChance" min="0" max="100" step="1">
-        <div class="pct" id="bitcrushChancePct"></div>
-      </div>
-    </div>
-    <div>
-      <div class="label"><span class="chip round" style="background:var(--pink)"></span>RETRIGGER</div>
-      <div class="sliderRow">
-        <input type="range" id="retriggerChance" min="0" max="100" step="1">
-        <div class="pct" id="retriggerChancePct"></div>
-      </div>
-    </div>
-    <div>
-      <div class="label"><span class="chip round" style="background:var(--purple)"></span>TAPE STOP</div>
-      <div class="sliderRow">
-        <input type="range" id="tapestopChance" min="0" max="100" step="1">
-        <div class="pct" id="tapestopChancePct"></div>
-      </div>
-    </div>
-    <div>
-      <div class="label"><span class="chip round" style="background:var(--teal)"></span>GATER</div>
-      <div class="sliderRow">
-        <input type="range" id="gaterChance" min="0" max="100" step="1">
-        <div class="pct" id="gaterChancePct"></div>
-      </div>
-    </div>
-    <div>
-      <div class="label"><span class="chip round" style="background:var(--yellow)"></span>REPITCH</div>
-      <div class="sliderRow">
-        <input type="range" id="repitchChance" min="0" max="100" step="1">
-        <div class="pct" id="repitchChancePct"></div>
-      </div>
-    </div>
-  </div>
+  <div class="label"><span class="chip diamond" style="background:var(--blue)"></span>SLICE FX — ONE PER CHOP, CHANCES COMPETE</div>
+  <div id="fxList"></div>
 
-  <div class="label"><span class="chip diamond" style="background:var(--orange)"></span>BITCRUSH AMOUNT</div>
-  <div class="row" data-group="bitcrushAmount">
-    <div class="seg" data-value="light">LIGHT</div>
-    <div class="seg" data-value="medium">MED</div>
-    <div class="seg" data-value="hard">HARD</div>
-    <div class="seg" data-value="random">RND</div>
-  </div>
+  <div class="label"><span class="chip tri"></span>GROOVE &amp; SPACE</div>
+  <div id="grooveList"></div>
 
   <div class="label"><span class="chip" style="background:var(--purple)"></span>VARIATIONS</div>
   <div class="row eight" data-group="variations" data-numeric>
@@ -442,25 +427,98 @@
     });
   });
 
-  const SLIDER_IDS = ["reverseChance", "bitcrushChance", "retriggerChance",
-    "tapestopChance", "gaterChance", "repitchChance"];
-  function refreshSliders() {
-    SLIDER_IDS.forEach((id) => {
-      const el = document.getElementById(id);
-      const pct = document.getElementById(id + "Pct");
-      el.value = Math.round(state[id] * 100);
-      pct.textContent = el.value + "%";
+  // ---- FX accordion: every effect is one row (toggle · name · chance ·
+  // ▾ options); the ▾ opens a dropdown with that effect's extra settings. ----
+  const FX_DEFS = [
+    { key: "reverse",    label: "REVERSE",       acc: "var(--blue)" },
+    { key: "retrigger",  label: "RETRIGGER",     acc: "var(--pink)" },
+    { key: "sweep",      label: "STUTTER SWEEP", acc: "var(--purple)",
+      opts: { prop: "dir", choices: [["up", "PITCH UP"], ["down", "PITCH DOWN"], ["random", "RND"]] } },
+    { key: "tapestop",   label: "TAPE STOP",     acc: "var(--teal)" },
+    { key: "scratch",    label: "SCRATCH",       acc: "var(--orange)",
+      opts: { prop: "mode", choices: [["scrub", "SCRUB"], ["spinback", "SPINBACK"], ["random", "RND"]] } },
+    { key: "gater",      label: "GATER",         acc: "var(--yellow)",
+      opts: { prop: "gates", choices: [[4, "4 GATES"], [8, "8 GATES"], [0, "RND"]] } },
+    { key: "repitch",    label: "REPITCH",       acc: "var(--blue)",
+      opts: { prop: "dir", choices: [["up", "OCT UP"], ["down", "OCT DOWN"], ["both", "BOTH"]] } },
+    { key: "bitcrush",   label: "BITCRUSH",      acc: "var(--orange)",
+      opts: { prop: "amount", choices: [["light", "LIGHT"], ["medium", "MED"], ["hard", "HARD"], ["random", "RND"]] } },
+    { key: "filter",     label: "FILTER SWEEP",  acc: "var(--teal)",
+      opts: { prop: "type", choices: [["lp", "LOW-PASS"], ["hp", "HIGH-PASS"], ["random", "RND"]] } },
+    { key: "tonaldelay", label: "TONAL DELAY",   acc: "var(--purple)" },
+    { key: "dropout",    label: "DROPOUT",       acc: "var(--pink)" },
+  ];
+  const GROOVE_DEFS = [
+    { key: "autopan", label: "AUTO-PAN", acc: "var(--teal)", prop: "amount" },
+    { key: "swing",   label: "SWING",    acc: "var(--pink)", prop: "amount", noToggle: true },
+    { key: "endfill", label: "END FILL", acc: "var(--yellow)", prop: "chance" },
+  ];
+  const fxSyncFns = [];
+  function buildFxRow(def, container) {
+    const st = () => state[def.key];
+    const prop = def.prop || "chance";
+    const row = document.createElement("div");
+    row.className = "fxRow";
+    row.style.setProperty("--acc", def.acc);
+    row.innerHTML =
+      (def.noToggle ? '<div style="width:40px;flex:0 0 auto"></div>' : '<div class="fxTog"></div>') +
+      '<div class="fxName">' + def.label + '</div>' +
+      '<input type="range" min="0" max="100" step="1">' +
+      '<div class="pct"></div>' +
+      (def.opts ? '<div class="fxChev">▾</div>' : '');
+    container.appendChild(row);
+
+    let panel = null;
+    if (def.opts) {
+      panel = document.createElement("div");
+      panel.className = "fxPanel";
+      panel.style.setProperty("--acc", def.acc);
+      const r = document.createElement("div");
+      r.className = "row";
+      r.style.gridTemplateColumns = "repeat(" + def.opts.choices.length + ",1fr)";
+      def.opts.choices.forEach(([val, lab]) => {
+        const seg = document.createElement("div");
+        seg.className = "seg";
+        seg.textContent = lab;
+        seg._val = val;
+        seg.addEventListener("click", () => { st()[def.opts.prop] = val; sync(); });
+        r.appendChild(seg);
+      });
+      panel.appendChild(r);
+      container.appendChild(panel);
+      row.querySelector(".fxChev").addEventListener("click", () => {
+        row.classList.toggle("expanded");
+        panel.classList.toggle("open");
+      });
+    }
+
+    const slider = row.querySelector("input");
+    const pct = row.querySelector(".pct");
+    slider.addEventListener("input", () => {
+      st()[prop] = slider.value / 100;
+      if (!def.noToggle && !st().on && slider.value > 0) st().on = true; // moving = intent
+      sync();
     });
+    if (!def.noToggle) {
+      row.querySelector(".fxTog").addEventListener("click", () => { st().on = !st().on; sync(); });
+    }
+
+    function sync() {
+      const s = st();
+      row.classList.toggle("on", def.noToggle ? s[prop] > 0 : !!s.on);
+      slider.value = Math.round(s[prop] * 100);
+      pct.textContent = slider.value + "%";
+      if (panel) {
+        panel.querySelectorAll(".seg").forEach((seg) =>
+          seg.classList.toggle("on", seg._val === s[def.opts.prop]));
+      }
+    }
+    fxSyncFns.push(sync);
+    sync();
   }
-  SLIDER_IDS.forEach((id) => {
-    const el = document.getElementById(id);
-    const pct = document.getElementById(id + "Pct");
-    el.addEventListener("input", () => {
-      state[id] = el.value / 100;
-      pct.textContent = el.value + "%";
-    });
-  });
-  refreshSliders();
+  FX_DEFS.forEach((d) => buildFxRow(d, document.getElementById("fxList")));
+  GROOVE_DEFS.forEach((d) => buildFxRow(d, document.getElementById("grooveList")));
+  function refreshSliders() { fxSyncFns.forEach((f) => f()); }
 
   // ---- Seed as a generated Memphis badge: the seed IS the artwork. ----
   // Same mulberry32 as the DSP, so the drawing is a faithful visual hash.
@@ -569,7 +627,9 @@
     return name;
   }
   function recipeFromState() {
-    const p = { ...state };
+    // Deep copy: the fx settings are nested objects, and a favorite must not
+    // keep live references into `state` (editing after save would mutate it).
+    const p = JSON.parse(JSON.stringify(state));
     delete p.uiScale;
     delete p.favorites;
     return p;
@@ -608,8 +668,9 @@
     favCount.textContent = favorites.length;
   }
   function loadFavorite(fav) {
-    Object.keys(fav.params).forEach((k) => {
-      if (k !== "uiScale") state[k] = fav.params[k];
+    const copy = JSON.parse(JSON.stringify(fav.params)); // deep, no shared refs
+    Object.keys(copy).forEach((k) => {
+      if (k !== "uiScale") state[k] = copy[k];
     });
     syncSegments();
     refreshSliders();

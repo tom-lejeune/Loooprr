@@ -19,13 +19,24 @@ audio is never touched.
 - **Loop length** — 1, 2, 4 or 8 bars; up to 8 variations per run, placed
   back-to-back.
 - **Glitch FX per slice** (Glitch2-style: chances compete, max one effect per
-  slice, reverse stacks on top):
+  slice, reverse stacks on top). Each effect has an on/off toggle, a chance
+  slider, and a dropdown with its own options:
   - **Reverse** — slice plays backwards
-  - **Bitcrush** — bit-depth + rate crush (light / medium / hard / random)
   - **Retrigger** — stutter-repeat of the slice's first chunk
+  - **Stutter sweep** — accelerating repeats gliding up or down in pitch
   - **Tape stop** — slice decelerates to standstill
-  - **Gater** — rhythmic gate pattern inside the slice
+  - **Scratch** — vinyl scrub (back-and-forth) or spinback (accelerating rewind)
+  - **Gater** — rhythmic gate pattern inside the slice (4/8/random gates)
   - **Repitch** — octave up (plays twice) or down (varispeed)
+  - **Bitcrush** — bit-depth + rate crush (light / medium / hard / random)
+  - **Filter sweep** — one-pole low- or high-pass gliding across the slice
+  - **Tonal delay** — pitched comb delay ringing at a random note
+  - **Dropout** — the slot stays silent (sparse, choppy grooves)
+- **Groove & space** (applied on top of everything):
+  - **Auto-pan** — alternating slots pan left/right by an adjustable width
+  - **Swing** — odd slots drag behind the grid
+  - **End fill** — the loop's final beat becomes an accelerating snare-roll
+    fill (half the time also rising in pitch)
 - **Crossfades** — equal-power slice joins (off/short/medium/long) that wrap
   around the loop end, so every loop is seamless.
 - **Visual seed** — the seed is drawn as generative Memphis shapes; same
