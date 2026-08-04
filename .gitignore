@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.ablx
+.env
+
+# The Ableton Extensions SDK/CLI tarballs may NOT be redistributed.
+# Get them from the Extensions beta (Centercode) and drop them in sdk/.
+sdk/*.tgz
