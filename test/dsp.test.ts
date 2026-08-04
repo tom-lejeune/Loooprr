@@ -240,6 +240,10 @@ test("sanitizeParams clamps and defaults bad input", () => {
   assert.equal(p.tapestopChance, 0);
   assert.equal(p.gaterChance, DEFAULT_PARAMS.gaterChance);
   assert.equal(p.repitchChance, 0.4);
+  assert.equal(p.uiScale, DEFAULT_PARAMS.uiScale); // missing -> default
+  assert.equal(sanitizeParams({ uiScale: 0.05 }).uiScale, 0.5); // clamped low
+  assert.equal(sanitizeParams({ uiScale: 3 }).uiScale, 1); // clamped high
+  assert.equal(sanitizeParams({ uiScale: 0.777 }).uiScale, 0.78); // rounded
   assert.equal(p.sliceLength, DEFAULT_PARAMS.sliceLength);
   assert.equal(p.loopBars, DEFAULT_PARAMS.loopBars);
   assert.equal(p.crossfade, DEFAULT_PARAMS.crossfade);

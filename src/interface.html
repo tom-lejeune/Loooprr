@@ -33,7 +33,17 @@
   }
   header, main, footer { position: relative; z-index: 1; }
 
-  header { padding: 20px 22px 6px; }
+  header { padding: 20px 22px 6px; display: flex; align-items: flex-start; }
+  .headText { flex: 1; }
+  .sizeCtl { display: flex; align-items: center; gap: 6px; padding-top: 2px; }
+  .sizeBtn {
+    width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+    background: #fff; border: 3px solid var(--ink); border-radius: 8px;
+    box-shadow: 2px 2px 0 var(--ink);
+    font-size: 14px; font-weight: 900; cursor: pointer;
+  }
+  .sizeBtn:hover { transform: translate(-1px, -1px); }
+  .sizePct { font-size: 10px; font-weight: 900; min-width: 32px; text-align: center; }
   h1 {
     font-family: "Arial Black", "Segoe UI", sans-serif;
     font-size: 26px; letter-spacing: 0.01em; line-height: 1;
@@ -147,8 +157,15 @@
 </head>
 <body>
 <header>
-  <h1>LOOOPRR</h1>
-  <span class="subtitle">CREATE RANDOM LOOP</span>
+  <div class="headText">
+    <h1>LOOOPRR</h1>
+    <span class="subtitle">CREATE RANDOM LOOP</span>
+  </div>
+  <div class="sizeCtl">
+    <div class="sizeBtn" id="sizeDown">−</div>
+    <div class="sizePct" id="sizePct"></div>
+    <div class="sizeBtn" id="sizeUp">+</div>
+  </div>
 </header>
 <main>
   <div class="label"><span class="chip" style="background:var(--yellow)"></span>SLICE LENGTH</div>
@@ -253,6 +270,27 @@
 </footer>
 <script>
   const state = __PARAMS__;
+
+  // ---- Scaling: design is 480x960; the window opens at 480*uiScale x
+  // 960*uiScale, and `zoom` shrinks the content to match. On load we also
+  // auto-fit to the screen, so a too-tall saved scale never hides CREATE. ----
+  const BASE_W = 480, BASE_H = 960;
+  const pctEl = document.getElementById("sizePct");
+  function applyScale(s) {
+    state.uiScale = Math.round(s * 100) / 100;
+    document.body.style.zoom = state.uiScale;
+    pctEl.textContent = Math.round(state.uiScale * 100) + "%";
+  }
+  const fit = Math.min(
+    1,
+    (screen.availHeight * 0.9) / BASE_H,
+    (screen.availWidth * 0.95) / BASE_W,
+  );
+  applyScale(Math.max(0.5, Math.min(state.uiScale || 1, fit)));
+  document.getElementById("sizeDown").addEventListener("click", () =>
+    applyScale(Math.max(0.5, state.uiScale - 0.1)));
+  document.getElementById("sizeUp").addEventListener("click", () =>
+    applyScale(Math.min(1, state.uiScale + 0.1)));
 
   function doSendMessage(message) {
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.live) {
@@ -390,11 +428,15 @@
     }, 450);
   });
 
+  function cancelResult() {
+    // Report the scale even on cancel, so a resize is not lost.
+    return { cancelled: true, uiScale: state.uiScale };
+  }
   document.getElementById("create").addEventListener("click", () => closeWithResult(state));
-  document.getElementById("cancel").addEventListener("click", () => closeWithResult({ cancelled: true }));
+  document.getElementById("cancel").addEventListener("click", () => closeWithResult(cancelResult()));
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter") closeWithResult(state);
-    if (e.key === "Escape") closeWithResult({ cancelled: true });
+    if (e.key === "Escape") closeWithResult(cancelResult());
   });
 
   syncSegments();

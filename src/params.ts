@@ -29,6 +29,8 @@ export interface CollageParams {
   variations: number;
   /** uint32 RNG seed; same seed + settings -> same loops. */
   seed: number;
+  /** Dialog scale 0.5..1 — auto-fitted to the screen, user-adjustable, persisted. */
+  uiScale: number;
 }
 
 export const DEFAULT_PARAMS: CollageParams = {
@@ -44,6 +46,7 @@ export const DEFAULT_PARAMS: CollageParams = {
   repitchChance: 0.1,
   variations: 4,
   seed: 252644670,
+  uiScale: 1,
 };
 
 const SLICE_LENGTHS: readonly SliceLength[] = ["1/4", "1/8", "1/16", "random"];
@@ -73,6 +76,11 @@ export function sanitizeParams(raw: unknown): CollageParams {
   const seedNum = Math.floor(Number(r.seed));
   const seed = Number.isFinite(seedNum) && seedNum >= 0 ? seedNum >>> 0 : d.seed;
 
+  const scaleNum = Number(r.uiScale);
+  const uiScale = Number.isFinite(scaleNum)
+    ? Math.round(Math.min(1, Math.max(0.5, scaleNum)) * 100) / 100
+    : d.uiScale;
+
   return {
     sliceLength: SLICE_LENGTHS.includes(r.sliceLength as SliceLength)
       ? (r.sliceLength as SliceLength)
@@ -92,5 +100,6 @@ export function sanitizeParams(raw: unknown): CollageParams {
       : d.bitcrushAmount,
     variations,
     seed,
+    uiScale,
   };
 }

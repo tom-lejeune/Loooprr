@@ -93,16 +93,24 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
     return;
   }
 
-  // Dialog: current saved settings as starting point.
+  // Dialog: current saved settings as starting point. The window opens at the
+  // persisted scale; inside, the page auto-fits to the screen and offers A-/A+
+  // controls, and reports the (possibly adjusted) scale back so the next open
+  // gets a correctly sized window.
   const current = await loadParams(context);
   const html = interfaceHtml.replace("__PARAMS__", JSON.stringify(current));
   const result = await context.ui.showModalDialog(
     `data:text/html,${encodeURIComponent(html)}`,
-    480,
-    960,
+    Math.round(480 * current.uiScale),
+    Math.round(960 * current.uiScale),
   );
-  const parsed = JSON.parse(result) as { cancelled?: boolean };
-  if (parsed.cancelled) return;
+  const parsed = JSON.parse(result) as { cancelled?: boolean; uiScale?: number };
+  if (parsed.cancelled) {
+    // Still remember a scale change, so Cancel doesn't undo the resize.
+    const scale = sanitizeParams({ ...current, uiScale: parsed.uiScale }).uiScale;
+    if (scale !== current.uiScale) await saveParams(context, { ...current, uiScale: scale });
+    return;
+  }
   const params = sanitizeParams(parsed);
   await saveParams(context, params);
 
