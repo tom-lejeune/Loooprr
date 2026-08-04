@@ -35,15 +35,6 @@
 
   header { padding: 20px 22px 6px; display: flex; align-items: flex-start; }
   .headText { flex: 1; }
-  .sizeCtl { display: flex; align-items: center; gap: 6px; padding-top: 2px; }
-  .sizeBtn {
-    width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
-    background: #fff; border: 3px solid var(--ink); border-radius: 8px;
-    box-shadow: 2px 2px 0 var(--ink);
-    font-size: 14px; font-weight: 900; cursor: pointer;
-  }
-  .sizeBtn:hover { transform: translate(-1px, -1px); }
-  .sizePct { font-size: 10px; font-weight: 900; min-width: 32px; text-align: center; }
   h1 {
     font-family: "Arial Black", "Segoe UI", sans-serif;
     font-size: 26px; letter-spacing: 0.01em; line-height: 1;
@@ -300,11 +291,6 @@
     <h1>LOOOPRR</h1>
     <span class="subtitle">CREATE RANDOM LOOP</span>
   </div>
-  <div class="sizeCtl">
-    <div class="sizeBtn" id="sizeDown">−</div>
-    <div class="sizePct" id="sizePct"></div>
-    <div class="sizeBtn" id="sizeUp">+</div>
-  </div>
 </header>
 <main>
 <div class="col">
@@ -391,27 +377,18 @@
 <script>
   const state = __PARAMS__;
 
-  // ---- Scaling: the design is BASE_W x BASE_H; the content zooms to fit the
-  // ACTUAL window, whatever size the host gave us (probe-sized, clamped by
-  // Live, or dragged by the user if the host allows resizing). uiScale is the
-  // user's preference (A-/A+): it caps the zoom now and sizes the window on
-  // the next open.
+  // ---- Scaling: the design is BASE_W x BASE_H; the content always zooms to
+  // fill the ACTUAL window (the extension opened it as large as the screen
+  // allows — the host window itself cannot be resized afterwards).
   const BASE_W = 960, BASE_H = 760;
-  const pctEl = document.getElementById("sizePct");
   function applyZoom() {
     document.body.style.zoom = Math.min(
-      state.uiScale || 1,
       window.innerWidth / BASE_W,
       window.innerHeight / BASE_H,
     );
   }
-  function applyScale(pref) {
-    state.uiScale = Math.round(pref * 100) / 100;
-    pctEl.textContent = Math.round(state.uiScale * 100) + "%";
-    applyZoom();
-  }
   window.addEventListener("resize", applyZoom);
-  applyScale(state.uiScale || 1);
+  applyZoom();
   document.getElementById("sizeDown").addEventListener("click", () =>
     applyScale(Math.max(0.5, state.uiScale - 0.1)));
   document.getElementById("sizeUp").addEventListener("click", () =>
@@ -847,8 +824,7 @@
     return { ...result, favorites };
   }
   function cancelResult() {
-    // Report scale and favorites even on cancel, so those edits are not lost.
-    return { cancelled: true, uiScale: state.uiScale };
+    return { cancelled: true };
   }
   document.getElementById("create").addEventListener("click", () =>
     closeWithResult(withFavorites(state)));

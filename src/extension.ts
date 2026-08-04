@@ -70,7 +70,11 @@ const MEASURE_HTML = `<!DOCTYPE html><html><head><style>
   addEventListener("click",report); // fallback if auto-close is blocked
 </script></body></html>`;
 
-/** Probe the screen and return the dialog scale that fits it (0.5..1). */
+/**
+ * Probe the screen and return the largest dialog scale that fits it — the
+ * window cannot be resized afterwards, so it always opens as big as the
+ * screen allows (also upscaling beyond 100% on large displays).
+ */
 async function measureFitScale(context: Ctx): Promise<number> {
   try {
     const probe = await context.ui.showModalDialog(
@@ -82,11 +86,11 @@ async function measureFitScale(context: Ctx): Promise<number> {
     if (typeof dims.w === "number" && typeof dims.h === "number" && dims.w > 0 && dims.h > 0) {
       return Math.max(
         0.5,
-        Math.min(1, (dims.h * 0.9) / DIALOG_H, (dims.w * 0.95) / DIALOG_W),
+        Math.min(2, (dims.h * 0.92) / DIALOG_H, (dims.w * 0.95) / DIALOG_W),
       );
     }
   } catch (e) {
-    console.warn("Loooprr: screen measure failed, using saved scale.", e);
+    console.warn("Loooprr: screen measure failed, opening at design size.", e);
   }
   return 1;
 }
@@ -246,30 +250,23 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
   const current = await loadParams(context);
   const favorites = await loadFavorites(context);
   const fitScale = await measureFitScale(context);
-  const scale = Math.max(0.5, Math.min(current.uiScale, fitScale));
   const html = interfaceHtml
-    .replace("__PARAMS__", JSON.stringify({ ...current, uiScale: scale }))
+    .replace("__PARAMS__", JSON.stringify(current))
     .replace("__FAVORITES__", JSON.stringify(favorites));
   const result = await context.ui.showModalDialog(
     `data:text/html,${encodeURIComponent(html)}`,
-    Math.round(DIALOG_W * scale),
-    Math.round(DIALOG_H * scale),
+    Math.round(DIALOG_W * fitScale),
+    Math.round(DIALOG_H * fitScale),
   );
   const parsed = JSON.parse(result) as {
     cancelled?: boolean;
-    uiScale?: number;
     favorites?: unknown;
   };
   // Favorites edits (save/rename/delete) persist even on cancel.
   if (parsed.favorites !== undefined) {
     await saveFavorites(context, sanitizeFavorites(parsed.favorites));
   }
-  if (parsed.cancelled) {
-    // Still remember a scale change, so Cancel doesn't undo the resize.
-    const scale = sanitizeParams({ ...current, uiScale: parsed.uiScale }).uiScale;
-    if (scale !== current.uiScale) await saveParams(context, { ...current, uiScale: scale });
-    return;
-  }
+  if (parsed.cancelled) return;
   const params = sanitizeParams(parsed);
   await saveParams(context, params);
 
@@ -298,7 +295,13 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
       const tempo = song.tempo;
       const tempDir = context.environment.tempDirectory ?? os.tmpdir();
       const stamp = Date.now();
-      const variants: { importedPath: string; slots: SlotInfo[] }[] = [];
+      const framesPerBeat = OUTPUT_SAMPLE_RATE * (60 / tempo);
+      // Per variation: either one file for the whole loop, or (COLOR CLIPS)
+      // one little file PER CHOP. Cutting real per-chop files sidesteps
+      // Live's warp interpretation of a shared file — beat markers into an
+      // auto-warped import land wherever Live's tempo guess puts them.
+      interface ClipPlan { importedPath: string; startBeat: number; durBeats: number; fxKey: string }
+      const variants: { importedPath?: string; plans?: ClipPlan[] }[] = [];
       for (let v = 0; v < params.variations; v++) {
         if (signal.aborted) return;
         await update(
@@ -311,52 +314,58 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
           sourceBeats: selEnd - selStart,
           variationIndex: v,
         });
-        const outPath = path.join(tempDir, `loooprr-${stamp}-v${v + 1}.wav`);
-        await fs.writeFile(outPath, encodeWav24(loop));
-        variants.push({
-          importedPath: await context.resources.importIntoProject(outPath),
-          slots: loop.slots,
-        });
+        if (params.colorclips.on) {
+          const plans: ClipPlan[] = [];
+          const clipSlots = loop.slots.filter((s) => s.fx !== "dropout");
+          for (let i = 0; i < clipSlots.length; i++) {
+            if (signal.aborted) return;
+            const s = clipSlots[i]!;
+            const chans = loop.channels.map((ch) => ch.slice(s.startFrame, s.endFrame));
+            const outPath = path.join(tempDir, `loooprr-${stamp}-v${v + 1}-s${i + 1}.wav`);
+            await fs.writeFile(
+              outPath,
+              encodeWav24({ channels: chans, sampleRate: loop.sampleRate }),
+            );
+            plans.push({
+              importedPath: await context.resources.importIntoProject(outPath),
+              startBeat: s.startFrame / framesPerBeat,
+              durBeats: (s.endFrame - s.startFrame) / framesPerBeat,
+              fxKey: slotFxKey(s),
+            });
+          }
+          variants.push({ plans });
+        } else {
+          const outPath = path.join(tempDir, `loooprr-${stamp}-v${v + 1}.wav`);
+          await fs.writeFile(outPath, encodeWav24(loop));
+          variants.push({ importedPath: await context.resources.importIntoProject(outPath) });
+        }
       }
       if (signal.aborted) return;
 
       // Phase 3: place the variations back-to-back on a new audio track.
       await update("Creating clips…", 90);
       const loopBeats = params.loopBars * 4;
-      const framesPerBeat = OUTPUT_SAMPLE_RATE * (60 / tempo);
       const outTrack = await song.createAudioTrack();
 
       if (params.colorclips.on) {
-        // One clip per chop, all referencing the variation's WAV via markers,
-        // colored by the effect that hit the chop. Dropouts stay real gaps.
         for (let v = 0; v < variants.length; v++) {
           if (signal.aborted) return;
-          const { importedPath, slots } = variants[v]!;
+          const plans = variants[v]!.plans!;
           const base = selStart + v * loopBeats;
-          const clipSlots = slots.filter((s) => s.fx !== "dropout");
           const clips = await Promise.all(
             context.withinTransaction(() =>
-              clipSlots.map((s) => {
-                const startBeat = s.startFrame / framesPerBeat;
-                const endBeat = s.endFrame / framesPerBeat;
-                return outTrack.createAudioClip({
-                  filePath: importedPath,
-                  startTime: base + startBeat,
-                  duration: endBeat - startBeat,
+              plans.map((p) =>
+                outTrack.createAudioClip({
+                  filePath: p.importedPath,
+                  startTime: base + p.startBeat,
+                  duration: p.durBeats,
                   isWarped: true,
-                  loopSettings: {
-                    looping: false,
-                    startMarker: startBeat,
-                    endMarker: endBeat,
-                    loopStart: startBeat,
-                    loopEnd: endBeat,
-                  },
-                });
-              }),
+                }),
+              ),
             ),
           );
           clips.forEach((clip, i) => {
-            const key = slotFxKey(clipSlots[i]!);
+            const key = plans[i]!.fxKey;
             clip.color = FX_CLIP_COLORS[key]!;
             clip.name = FX_CLIP_TAGS[key]!;
           });
@@ -366,7 +375,7 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
           context.withinTransaction(() =>
             variants.map(({ importedPath }, v) =>
               outTrack.createAudioClip({
-                filePath: importedPath,
+                filePath: importedPath!,
                 startTime: selStart + v * loopBeats,
                 isWarped: true,
                 duration: loopBeats,
