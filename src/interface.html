@@ -477,7 +477,17 @@
       const key = row.dataset.group;
       state[key] = row.hasAttribute("data-numeric") ? Number(seg.dataset.value) : seg.dataset.value;
       syncSegments();
+      // Every button press moves the wall and glows in the group's color.
+      const GROUP_COLORS = {
+        sliceLength: "#ffd600", loopBars: "#ff4d8d", crossfade: "#00c6ae",
+        variations: "#9b5de5",
+        density: { sprinkle: "#00c6ae", seasoned: "#ffd600", halfway: "#ff8c1a",
+          hectic: "#ff4d8d", gonuts: "#d64545" },
+      };
+      const c = key === "density" ? GROUP_COLORS.density[state.density] : GROUP_COLORS[key];
+      if (c) pulseBg(c, 0.18);
       if (key === "density") renderBg(); // wallpaper busyness follows density
+      else joltBg();
     });
   });
 
@@ -613,7 +623,7 @@
           sEl._prev = v;
           nudgeBg(clampPx((v - prev) * 1.2, 35), (Math.random() - 0.5) * 10);
           st()[def.extraSlider.prop] = v / 100;
-          pulseBg(def.acc);
+          pulseBg(def.acc, 0.24);
         });
         fxSyncFns.push(() => {
           sEl.value = Math.round(st()[def.extraSlider.prop] * 100);
@@ -638,9 +648,9 @@
         // Microscope nudge: the wall drifts with your slider movement.
         nudgeBg(clampPx((v - prev) * 1.2, 35), (Math.random() - 0.5) * 10);
         st()[prop] = v / 100;
-        pulseBg(def.acc); // wallpaper glows in this effect's color
+        pulseBg(def.acc, 0.24); // wallpaper glows in this effect's color
         if (!def.noToggle && !st().on && v > 0) st().on = true; // moving = intent
-        if (!def.noToggle && v === 0) st().on = false; // slid to zero = off
+        if (!def.noToggle && st().on && v === 0) { st().on = false; sighBg(); } // slid to zero = off
         if (def.isFx) {
           normalizeWeights(def.key);
           refreshSliders(); // the other weights visibly give way
@@ -654,7 +664,9 @@
         st().on = !st().on;
         if (st().on) {
           joltBg(); // switching an effect on shears the wall — brusquer than sliding
-          pulseBg(def.acc);
+          pulseBg(def.acc, 0.3);
+        } else {
+          sighBg(); // switching off: a short exhale
         }
         // Switching on at 0 weight would be inaudible — jump to "a little bit".
         if (!def.toggleOnly && st().on && !(st()[prop] > 0)) st()[prop] = 0.3;
@@ -803,9 +815,9 @@
   // Three depth layers: back moves least, front most (and is bigger/bolder).
   const LAYER_F = [0.45, 1, 1.7];
   const LAYER_STYLE = [
-    { op: 0.10, sz: 0.7 },
-    { op: 0.16, sz: 1 },
-    { op: 0.21, sz: 1.3 },
+    { op: 0.16, sz: 0.7 },
+    { op: 0.24, sz: 1 },
+    { op: 0.30, sz: 1.3 },
   ];
   let bgSvg = null;
   let bgLayerEls = [];
@@ -871,12 +883,23 @@
     });
   }
   let bgPulseTimer = 0;
-  function pulseBg(color) {
+  function pulseBg(color, strength) {
     bgPulseEl.style.background =
       "radial-gradient(circle at 50% 40%, " + color + " 0%, transparent 65%)";
-    bgPulseEl.style.opacity = "0.14";
+    bgPulseEl.style.opacity = String(strength || 0.2);
     clearTimeout(bgPulseTimer);
     bgPulseTimer = setTimeout(() => { bgPulseEl.style.opacity = "0"; }, 350);
+  }
+  /** A short sigh: the wall dips quickly and recovers slowly (effect off). */
+  function sighBg() {
+    if (!bgSvg) return;
+    bgSvg.style.transition = "transform 0.28s cubic-bezier(0.4, 0, 0.6, 1)";
+    bgSvg.style.transform = "translateY(9px)";
+    setTimeout(() => {
+      if (!bgSvg) return;
+      bgSvg.style.transition = "transform 0.9s cubic-bezier(0.16, 0.6, 0.18, 1)";
+      bgSvg.style.transform = "translateY(0)";
+    }, 300);
   }
 
   const dice = document.getElementById("fxRandom");
@@ -887,7 +910,7 @@
     setTimeout(() => {
       randomizeFx();
       refreshSliders();
-      pulseBg("#ffd600");
+      pulseBg("#ffd600", 0.3);
       bumpBg(); // someone thumped the table — everything shuffles a bit
       state.advancedOpen = true; // show what just changed
       syncAdvanced();
