@@ -1,6 +1,6 @@
 {
   "name": "loooprr",
-  "version": "2.4.2",
+  "version": "2.5.0",
   "main": "dist/extension.js",
   "engines": {
     "node": ">=24.14.1"

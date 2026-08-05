@@ -202,12 +202,6 @@
   .panelSlider { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
   .panelSlider .miniLabel { font-size: 9px; font-weight: 900; letter-spacing: 0.06em; width: 44px; }
 
-  .seedVal {
-    width: 220px; display: flex; align-items: center; justify-content: center;
-    background: #fff; border: 3px solid var(--ink); border-radius: 9px;
-    box-shadow: 3px 3px 0 var(--ink);
-    padding: 3px 6px; overflow: hidden; min-height: 46px;
-  }
   .dice {
     background: var(--yellow); border: 3px solid var(--ink); border-radius: 9px;
     box-shadow: 3px 3px 0 var(--ink);
@@ -366,11 +360,10 @@
   </div>
   <div class="headCtl">
     <div class="headRow">
-      <div class="seedVal" id="seedVal" title="Seed — same shape = same loops. Click for a new one!"></div>
       <div class="favSave" id="favSave" title="Save the current recipe (seed + all settings)"><span class="heart">♥</span><span>SAVE</span></div>
       <div class="favBrowse" id="favBrowse" title="Browse saved favorites"><span class="count" id="favCount">0</span><span>BROWSE</span></div>
     </div>
-    <div class="favInfo" id="favInfo">SEED = SAME SHAPE, SAME LOOPS · ♥ SAVES THE RECIPE</div>
+    <div class="favInfo" id="favInfo">♥ SAVES YOUR RECIPE · BROWSE LOADS IT IN ANY PROJECT</div>
   </div>
 </header>
 <main>
@@ -449,9 +442,6 @@
 <div id="introOverlay">
   <div class="introNote" style="left: 2.5%; top: 17%;">
     <span class="arr">↖</span>YOUR LOOP BASICS —<br>SLICE SIZE, LENGTH &amp; VARIATIONS
-  </div>
-  <div class="introNote side" style="right: 48.5%; top: 4.5%;">
-    <span>THE SEED — CLICK IT FOR NEW CHOPS<br>(SAME PICTURE = SAME LOOPS)</span><span class="arr">→</span>
   </div>
   <div class="introNote" style="right: 16%; top: 23%;">
     <span class="arr">↑</span><b>ADVANCED EFFECTS</b> — CLICK OPEN TO PICK<br>WHICH EFFECTS &amp; HOW MUCH THEY'RE USED<br>(OR ROLL THE DICE TO RANDOMIZE)
@@ -533,6 +523,7 @@
       if (!seg) return;
       const key = row.dataset.group;
       state[key] = row.hasAttribute("data-numeric") ? Number(seg.dataset.value) : seg.dataset.value;
+      rerollSeed(); // every adjustment quietly deals a fresh shuffle
       syncSegments();
       // Every button press moves the wall and glows in the group's color.
       const GROUP_COLORS = {
@@ -664,7 +655,7 @@
         seg.className = "seg";
         seg.textContent = lab;
         seg._val = val;
-        seg.addEventListener("click", () => { st()[def.opts.prop] = val; sync(); });
+        seg.addEventListener("click", () => { st()[def.opts.prop] = val; rerollSeed(); sync(); });
         r.appendChild(seg);
       });
       if (def.extraSlider) {
@@ -680,6 +671,7 @@
           sEl._prev = v;
           nudgeBg(clampPx((v - prev) * 1.2, 35), (Math.random() - 0.5) * 10);
           st()[def.extraSlider.prop] = v / 100;
+          rerollSeed();
           pulseBg(def.acc, 0.24);
         });
         fxSyncFns.push(() => {
@@ -705,6 +697,7 @@
         // Microscope nudge: the wall drifts with your slider movement.
         nudgeBg(clampPx((v - prev) * 1.2, 35), (Math.random() - 0.5) * 10);
         st()[prop] = v / 100;
+        rerollSeed();
         pulseBg(def.acc, 0.24); // wallpaper glows in this effect's color
         if (!def.noToggle && !st().on && v > 0) st().on = true; // moving = intent
         if (!def.noToggle && st().on && v === 0) { st().on = false; sighBg(); } // slid to zero = off
@@ -719,6 +712,7 @@
     if (!def.noToggle) {
       row.querySelector(".fxTog").addEventListener("click", () => {
         st().on = !st().on;
+        if (!def.toggleOnly) rerollSeed();
         if (st().on) {
           joltBg(); // switching an effect on shears the wall — brusquer than sliding
           pulseBg(def.acc, 0.3);
@@ -842,19 +836,12 @@
     }
   }
 
-  const seedVal = document.getElementById("seedVal");
-  function drawSeed(seed) {
-    const rng = mulberry32(seed);
-    const W = 300, H = 52;
-    const n = 4 + Math.floor(rng() * 3); // 4-6 shapes side by side
-    let shapes = "";
-    for (let i = 0; i < n; i++) {
-      const cx = (W / n) * (i + 0.5) + (rng() - 0.5) * 8;
-      const cy = H / 2 + (rng() - 0.5) * 10;
-      shapes += seedShape(rng, cx, cy, 30);
-    }
-    seedVal.innerHTML =
-      `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${shapes}</svg>`;
+  // ---- The seed lives invisibly: every REAL adjustment (slider, button,
+  // randomize) rolls a fresh shuffle in the background. Opening the dialog
+  // or loading a favorite keeps the stored seed, so a loop you just made
+  // can be reopened and ♥ SAVED exactly as it sounded. ----
+  function rerollSeed() {
+    state.seed = Math.floor(Math.random() * 4294967296) >>> 0;
   }
 
   // ---- RANDOMIZE: reroll ALL sound-shaping settings, not just the seed.
@@ -874,6 +861,7 @@
       if (def.opts) s[def.opts.prop] = pickOne(def.opts.choices.map((c) => c[0]));
       if (def.extraSlider) s[def.extraSlider.prop] = rndAmt(1, 0.15);
     });
+    rerollSeed();
     normalizeWeights(null);
   }
   // ---- Living wallpaper: shapes seeded from the seed, count coupled to the
@@ -990,17 +978,6 @@
     }, 450);
   });
 
-  // The seed badge itself rolls a fresh seed (chop order + wallpaper).
-  seedVal.style.cursor = "pointer";
-  seedVal.addEventListener("click", () => {
-    const scramble = setInterval(() => drawSeed(Math.floor(Math.random() * 4294967296)), 60);
-    setTimeout(() => {
-      clearInterval(scramble);
-      state.seed = Math.floor(Math.random() * 4294967296);
-      drawSeed(state.seed);
-      renderBg();
-    }, 350);
-  });
 
   // ---- Favorites: named recipes (seed + all DSP settings). Edits live here
   // and travel back with the dialog result (also on cancel). ----
@@ -1070,7 +1047,6 @@
     syncSegments();
     normalizeWeights(null);
     refreshSliders();
-    drawSeed(state.seed);
     renderBg();
     favInfo.innerHTML = `Loaded: <b></b>`;
     favInfo.querySelector("b").textContent = fav.name;
@@ -1242,7 +1218,6 @@
   delete state.showIntro; // a page flag, never part of settings or recipes
 
   syncSegments();
-  drawSeed(state.seed);
   renderBg();
   applyZoom(); // measure the real content height now that every row exists
 </script>
