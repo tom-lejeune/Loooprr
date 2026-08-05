@@ -36,10 +36,17 @@
     transition: transform 1.05s cubic-bezier(0.16, 0.6, 0.18, 1);
     will-change: transform;
   }
+  /* Classic depth of field: far layer blurry, front layer sharp. */
+  #bgLayer .lyr:nth-of-type(1) { filter: blur(2.5px); }
+  #bgLayer .lyr:nth-of-type(2) { filter: blur(1px); }
   #bgLayer svg.fast .lyr { transition-duration: 0.32s; }
   #bgLayer g.shape {
     transition: transform 0.85s cubic-bezier(0.2, 0.55, 0.2, 1);
   }
+  /* ECO visuals: no blur, no motion, no pulses — just a still wallpaper. */
+  body.eco #bgLayer .lyr { filter: none; transition: none; }
+  body.eco #bgLayer g.shape { transition: none; }
+  body.eco #bgPulse { display: none; }
   #bgPulse {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
     opacity: 0; transition: opacity 0.25s;
@@ -309,7 +316,13 @@
     flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
     padding: 14px 22px 20px;
   }
-  footer p { flex: 1; font-size: 10px; font-weight: 600; color: #555; padding-right: 8px; }
+  .footLeft { flex: 1; display: flex; align-items: center; }
+  .ecoTog {
+    font-size: 9px; font-weight: 900; letter-spacing: 0.08em; color: #777;
+    border: 2px solid #999; border-radius: 6px; padding: 5px 10px; cursor: pointer;
+  }
+  .ecoTog:hover { color: var(--ink); border-color: var(--ink); }
+  body.eco .ecoTog { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .btn {
     border: 3px solid var(--ink); border-radius: 10px;
     box-shadow: 3px 3px 0 var(--ink);
@@ -416,7 +429,9 @@
   <div class="ctxItem" id="ctxDelete">🗑 DELETE</div>
 </div>
 <footer>
-  <p>Slices &amp; shuffles the selected tracks into new tempo-synced loops — chops stay on the grid.</p>
+  <div class="footLeft">
+    <div class="ecoTog" id="ecoTog" title="ECO switches off blur, motion and glow for low-power machines">VISUALS: FULL</div>
+  </div>
   <div class="btn" id="cancel">CANCEL</div>
   <div class="btn primary" id="create">CREATE</div>
 </footer>
@@ -714,6 +729,18 @@
   state.advancedOpen = false; // always start collapsed, whatever was stored
   syncAdvanced();
 
+  // ---- ECO visuals: kills blur, motion and glow for low-power machines. ----
+  const ecoTog = document.getElementById("ecoTog");
+  function syncEco() {
+    document.body.classList.toggle("eco", !!state.eco);
+    ecoTog.textContent = state.eco ? "VISUALS: ECO" : "VISUALS: FULL";
+  }
+  ecoTog.addEventListener("click", () => {
+    state.eco = !state.eco;
+    syncEco();
+  });
+  syncEco();
+
   // ---- Seed as a generated Memphis badge: the seed IS the artwork. ----
   // Same mulberry32 as the DSP, so the drawing is a faithful visual hash.
   function mulberry32(seed) {
@@ -855,14 +882,14 @@
   }
   /** Microscope-slide nudge: the layers drift by depth and stay there. */
   function nudgeBg(dx, dy) {
-    if (!bgSvg) return;
+    if (!bgSvg || state.eco) return;
     bgView.x = clampPx(bgView.x + dx, 55);
     bgView.y = clampPx(bgView.y + dy, 55);
     applyView();
   }
   /** Brusque jolt (toggling an effect on): the layers shear apart briefly fast. */
   function joltBg() {
-    if (!bgSvg) return;
+    if (!bgSvg || state.eco) return;
     const a = Math.random() * Math.PI * 2;
     const mag = 16 + Math.random() * 14;
     bgJolt.forEach((j, i) => {
@@ -876,6 +903,7 @@
   }
   /** Table bump: every shape jolts in its own direction and settles there. */
   function bumpBg() {
+    if (state.eco) return;
     bgShapes.forEach((s) => {
       s.x = clampPx(s.x + (Math.random() - 0.5) * 80, 70);
       s.y = clampPx(s.y + (Math.random() - 0.5) * 80, 70);
@@ -884,6 +912,7 @@
   }
   let bgPulseTimer = 0;
   function pulseBg(color, strength) {
+    if (state.eco) return;
     bgPulseEl.style.background =
       "radial-gradient(circle at 50% 40%, " + color + " 0%, transparent 65%)";
     bgPulseEl.style.opacity = String(strength || 0.2);
@@ -892,7 +921,7 @@
   }
   /** A short sigh: the wall dips quickly and recovers slowly (effect off). */
   function sighBg() {
-    if (!bgSvg) return;
+    if (!bgSvg || state.eco) return;
     bgSvg.style.transition = "transform 0.28s cubic-bezier(0.4, 0, 0.6, 1)";
     bgSvg.style.transform = "translateY(9px)";
     setTimeout(() => {
@@ -954,6 +983,8 @@
     const p = JSON.parse(JSON.stringify(state));
     delete p.uiScale;
     delete p.favorites;
+    delete p.eco; // device preference, not part of a recipe
+    delete p.advancedOpen;
     return p;
   }
 
@@ -992,7 +1023,7 @@
   function loadFavorite(fav) {
     const copy = JSON.parse(JSON.stringify(fav.params)); // deep, no shared refs
     Object.keys(copy).forEach((k) => {
-      if (k !== "uiScale") state[k] = copy[k];
+      if (k !== "uiScale" && k !== "eco" && k !== "advancedOpen") state[k] = copy[k];
     });
     syncSegments();
     normalizeWeights(null);
@@ -1139,7 +1170,8 @@
     return { ...result, favorites };
   }
   function cancelResult() {
-    return { cancelled: true };
+    // The eco preference survives a cancel.
+    return { cancelled: true, eco: state.eco };
   }
   document.getElementById("create").addEventListener("click", () =>
     closeWithResult(withFavorites(state)));

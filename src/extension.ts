@@ -265,12 +265,18 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
   const parsed = JSON.parse(result) as {
     cancelled?: boolean;
     favorites?: unknown;
+    eco?: unknown;
   };
   // Favorites edits (save/rename/delete) persist even on cancel.
   if (parsed.favorites !== undefined) {
     await saveFavorites(context, sanitizeFavorites(parsed.favorites));
   }
-  if (parsed.cancelled) return;
+  if (parsed.cancelled) {
+    // The ECO visuals preference also survives a cancel.
+    const eco = sanitizeParams({ ...current, eco: parsed.eco }).eco;
+    if (eco !== current.eco) await saveParams(context, { ...current, eco });
+    return;
+  }
   const params = sanitizeParams(parsed);
   await saveParams(context, params);
 

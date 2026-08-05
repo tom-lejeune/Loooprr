@@ -71,6 +71,8 @@ export interface CollageParams {
   density: FxDensity;
   /** Whether the ADVANCED effects rack is expanded in the dialog. */
   advancedOpen: boolean;
+  /** ECO visuals: no blur, motion or glow — for low-power machines. */
+  eco: boolean;
 
   // Slice FX — at most one per slice, drawn from the density budget by weight.
   reverse: ReverseFx;
@@ -101,6 +103,7 @@ export const DEFAULT_PARAMS: CollageParams = {
   uiScale: 1,
   density: "seasoned",
   advancedOpen: false,
+  eco: false,
   reverse: { on: true, weight: 0.5, mode: "full" },
   retrigger: { on: true, weight: 0.5, chunk: "random" },
   sweep: { on: false, weight: 0.5, dir: "random" },
@@ -212,6 +215,7 @@ export function sanitizeParams(raw: unknown): CollageParams {
     uiScale,
     density: pick(r.density, FX_DENSITIES, d.density),
     advancedOpen: bool(r.advancedOpen, d.advancedOpen),
+    eco: bool(r.eco, d.eco),
     reverse: {
       ...chanceFx(r, "reverse", "reverseChance", d.reverse),
       mode: nestedOption(r, "reverse", "mode",
