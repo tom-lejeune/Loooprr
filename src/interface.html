@@ -28,16 +28,17 @@
   #bgLayer {
     position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
   }
-  /* The wall is STILL until touched: sliders nudge the whole image like a
-     microscope slide, RANDOMIZE bumps the table so every shape jolts. */
-  #bgLayer svg {
-    width: 100%; height: 100%;
-    transition: transform 0.55s cubic-bezier(0.3, 0, 0.2, 1);
+  /* The wall is STILL until touched. Three parallax layers move by different
+     amounts: sliders nudge the view (long ease-out), toggling an effect on
+     jolts the layers apart (brusquer), RANDOMIZE bumps every single shape. */
+  #bgLayer svg { width: 100%; height: 100%; }
+  #bgLayer .lyr {
+    transition: transform 1.05s cubic-bezier(0.16, 0.6, 0.18, 1);
     will-change: transform;
   }
-  #bgLayer g {
-    opacity: 0.16;
-    transition: transform 0.6s cubic-bezier(0.3, 0, 0.2, 1);
+  #bgLayer svg.fast .lyr { transition-duration: 0.32s; }
+  #bgLayer g.shape {
+    transition: transform 0.85s cubic-bezier(0.2, 0.55, 0.2, 1);
   }
   #bgPulse {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -651,6 +652,10 @@
     if (!def.noToggle) {
       row.querySelector(".fxTog").addEventListener("click", () => {
         st().on = !st().on;
+        if (st().on) {
+          joltBg(); // switching an effect on shears the wall — brusquer than sliding
+          pulseBg(def.acc);
+        }
         // Switching on at 0 weight would be inaudible — jump to "a little bit".
         if (!def.toggleOnly && st().on && !(st()[prop] > 0)) st()[prop] = 0.3;
         if (def.isFx) {
@@ -795,31 +800,67 @@
   const bgLayer = document.getElementById("bgLayer");
   const bgPulseEl = document.getElementById("bgPulse");
   const DENSITY_LEVEL = { sprinkle: 10, seasoned: 25, halfway: 50, hectic: 75, gonuts: 100 };
+  // Three depth layers: back moves least, front most (and is bigger/bolder).
+  const LAYER_F = [0.45, 1, 1.7];
+  const LAYER_STYLE = [
+    { op: 0.10, sz: 0.7 },
+    { op: 0.16, sz: 1 },
+    { op: 0.21, sz: 1.3 },
+  ];
   let bgSvg = null;
+  let bgLayerEls = [];
   let bgShapes = []; // per-shape persistent offsets for table bumps
-  let bgView = { x: 0, y: 0 }; // whole-image offset for slider nudges
+  let bgView = { x: 0, y: 0 }; // logical view offset (parallax multiplies it)
+  let bgJolt = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }]; // per-layer extras
   const clampPx = (v, m) => Math.max(-m, Math.min(m, v));
   function renderBg() {
     const rng = mulberry32((state.seed ^ 0x5eed) >>> 0);
     const count = Math.round(10 + (DENSITY_LEVEL[state.density] || 25) * 0.28); // ~13..38
-    let shapes = "";
+    const perLayer = ["", "", ""];
     for (let i = 0; i < count; i++) {
+      const L = Math.floor(rng() * 3);
       const cx = 20 + rng() * 920;
       const cy = 20 + rng() * 800;
-      shapes += "<g>" + seedShape(rng, cx, cy, 34 + rng() * 46) + "</g>";
+      perLayer[L] += '<g class="shape">' +
+        seedShape(rng, cx, cy, (34 + rng() * 46) * LAYER_STYLE[L].sz) + "</g>";
     }
     bgLayer.innerHTML =
-      '<svg viewBox="0 0 960 840" preserveAspectRatio="xMidYMid slice">' + shapes + "</svg>";
+      '<svg viewBox="0 0 960 840" preserveAspectRatio="xMidYMid slice">' +
+      perLayer.map((s, i) => '<g class="lyr" opacity="' + LAYER_STYLE[i].op + '">' + s + "</g>").join("") +
+      "</svg>";
     bgSvg = bgLayer.querySelector("svg");
+    bgLayerEls = [...bgLayer.querySelectorAll("g.lyr")];
     bgView = { x: 0, y: 0 };
-    bgShapes = [...bgLayer.querySelectorAll("g")].map((el) => ({ el, x: 0, y: 0 }));
+    bgJolt = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
+    bgShapes = [...bgLayer.querySelectorAll("g.shape")].map((el) => ({ el, x: 0, y: 0 }));
   }
-  /** Microscope-slide nudge: the whole image drifts a touch and stays there. */
+  function applyView() {
+    bgLayerEls.forEach((el, i) => {
+      el.style.transform = "translate(" +
+        (bgView.x * LAYER_F[i] + bgJolt[i].x).toFixed(1) + "px," +
+        (bgView.y * LAYER_F[i] + bgJolt[i].y).toFixed(1) + "px)";
+    });
+  }
+  /** Microscope-slide nudge: the layers drift by depth and stay there. */
   function nudgeBg(dx, dy) {
     if (!bgSvg) return;
-    bgView.x = clampPx(bgView.x + dx, 60);
-    bgView.y = clampPx(bgView.y + dy, 60);
-    bgSvg.style.transform = "translate(" + bgView.x + "px," + bgView.y + "px)";
+    bgView.x = clampPx(bgView.x + dx, 55);
+    bgView.y = clampPx(bgView.y + dy, 55);
+    applyView();
+  }
+  /** Brusque jolt (toggling an effect on): the layers shear apart briefly fast. */
+  function joltBg() {
+    if (!bgSvg) return;
+    const a = Math.random() * Math.PI * 2;
+    const mag = 16 + Math.random() * 14;
+    bgJolt.forEach((j, i) => {
+      const dir = i % 2 === 0 ? 1 : -1; // layers move against each other
+      j.x = clampPx(j.x + Math.cos(a) * mag * dir, 50);
+      j.y = clampPx(j.y + Math.sin(a) * mag * dir, 50);
+    });
+    bgSvg.classList.add("fast");
+    applyView();
+    setTimeout(() => bgSvg && bgSvg.classList.remove("fast"), 380);
   }
   /** Table bump: every shape jolts in its own direction and settles there. */
   function bumpBg() {
