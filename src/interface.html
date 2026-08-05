@@ -24,23 +24,21 @@
     user-select: none;
     overflow: hidden;
   }
-  body::before { /* Memphis shapes wallpaper — soft, behind everything */
-    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.8;
-    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='480' height='480'>\
-<circle cx='62' cy='70' r='26' fill='none' stroke='%2300c6ae' stroke-opacity='.30' stroke-width='5'/>\
-<circle cx='332' cy='44' r='12' fill='%23ff4d8d' fill-opacity='.24'/>\
-<path d='M22 306 l30 -36 30 36 z' fill='%23ffd600' fill-opacity='.32'/>\
-<path d='M198 148 l24 13 -24 13 24 13 -24 13' fill='none' stroke='%239b5de5' stroke-opacity='.28' stroke-width='5' stroke-linejoin='round'/>\
-<path d='M400 224 h38 M419 205 v38' stroke='%23ff8c1a' stroke-opacity='.30' stroke-width='6' stroke-linecap='round'/>\
-<circle cx='122' cy='424' r='20' fill='none' stroke='%232f9bff' stroke-opacity='.26' stroke-width='5'/>\
-<path d='M296 384 q22 -30 44 0 t44 0' fill='none' stroke='%23ff4d8d' stroke-opacity='.26' stroke-width='5' stroke-linecap='round'/>\
-<circle cx='442' cy='442' r='9' fill='%2300c6ae' fill-opacity='.28'/>\
-<path d='M60 202 l16 16 M76 202 l-16 16' stroke='%23111111' stroke-opacity='.14' stroke-width='4' stroke-linecap='round'/>\
-<circle cx='252' cy='262' r='5' fill='%23111111' fill-opacity='.12'/>\
-<path d='M368 104 l30 -18 v36 z' fill='%232fd04c' fill-opacity='.26'/>\
-<circle cx='210' cy='40' r='6' fill='%239b5de5' fill-opacity='.24'/>\
-<path d='M420 330 a16 16 0 1 1 -32 0' fill='none' stroke='%23f07ddb' stroke-opacity='.30' stroke-width='5' stroke-linecap='round'/>\
-</svg>") 0 0 / 480px 480px;
+  /* Living Memphis wallpaper: seeded shapes, density-coupled, drifting. */
+  #bgLayer {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+  }
+  #bgLayer svg { width: 100%; height: 100%; }
+  #bgLayer g {
+    animation: bgFloat var(--dur, 40s) ease-in-out infinite;
+  }
+  @keyframes bgFloat {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(var(--dx, 0px), var(--dy, 0px)); }
+  }
+  #bgPulse {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    opacity: 0; transition: opacity 0.25s;
   }
   header, main, footer { position: relative; z-index: 1; }
 
@@ -110,6 +108,8 @@
   .advChev .arrow { transition: transform 0.12s; display: inline-block; }
   .advToggle.open .advChev { background: var(--yellow); }
   .advToggle.open .advChev .arrow { transform: rotate(90deg); }
+  .advSpacer { flex: 1; }
+  .advToggle .dice { font-size: 15px; padding: 5px 12px; box-shadow: 2px 2px 0 var(--ink); }
   #fxList.collapsed { display: none; }
   .seg {
     background: #fff;
@@ -317,6 +317,8 @@
 </style>
 </head>
 <body>
+<div id="bgLayer"></div>
+<div id="bgPulse"></div>
 <header>
   <div class="headText">
     <h1>LOOOPRR</h1>
@@ -324,8 +326,7 @@
   </div>
   <div class="headCtl">
     <div class="headRow">
-      <div class="seedVal" id="seedVal" title="Seed — same shape = same loops"></div>
-      <div class="dice" id="newSeed" title="Randomize ALL settings + seed"><span class="die">🎲</span><span class="txt">RANDOMIZE</span></div>
+      <div class="seedVal" id="seedVal" title="Seed — same shape = same loops. Click for a new one!"></div>
       <div class="favSave" id="favSave" title="Save the current recipe (seed + all settings)"><span class="heart">♥</span><span>SAVE</span></div>
       <div class="favBrowse" id="favBrowse" title="Browse saved favorites"><span class="count" id="favCount">0</span><span>BROWSE</span></div>
     </div>
@@ -370,7 +371,7 @@
     <div class="seg" data-value="8">8</div>
   </div>
 
-  <div class="label"><span class="chip tri"></span>GROOVE &amp; SPACE</div>
+  <div class="label"><span class="chip tri"></span>SPACE</div>
   <div id="grooveList"></div>
 
   <div class="label"><span class="chip diamond" style="background:var(--blue)"></span>FX DENSITY — HOW MANY CHOPS GET AN EFFECT</div>
@@ -384,7 +385,12 @@
 </div>
 
 <div class="col">
-  <div class="advToggle" id="advToggle"><span class="advChev"><span class="arrow">▸</span></span> ADVANCED — PICK &amp; WEIGH THE EFFECTS</div>
+  <div class="advToggle" id="advToggle">
+    <span class="advChev"><span class="arrow">▸</span></span>
+    <span>ADVANCED EFFECTS</span>
+    <span class="advSpacer"></span>
+    <div class="dice" id="fxRandom" title="Randomize the effects below (nothing else)"><span class="die">🎲</span><span class="txt">RANDOMIZE</span></div>
+  </div>
   <div id="fxList" class="collapsed"></div>
 </div>
 </main>
@@ -467,6 +473,7 @@
       const key = row.dataset.group;
       state[key] = row.hasAttribute("data-numeric") ? Number(seg.dataset.value) : seg.dataset.value;
       syncSegments();
+      if (key === "density") renderBg(); // wallpaper busyness follows density
     });
   });
 
@@ -598,6 +605,7 @@
         sEl.addEventListener("input", () => {
           sEl.value = snap(+sEl.value);
           st()[def.extraSlider.prop] = sEl.value / 100;
+          pulseBg(def.acc);
         });
         fxSyncFns.push(() => {
           sEl.value = Math.round(st()[def.extraSlider.prop] * 100);
@@ -617,7 +625,9 @@
       slider.addEventListener("input", () => {
         slider.value = snap(+slider.value); // sticky at 25 / 50 / 75
         st()[prop] = slider.value / 100;
+        pulseBg(def.acc); // wallpaper glows in this effect's color
         if (!def.noToggle && !st().on && slider.value > 0) st().on = true; // moving = intent
+        if (!def.noToggle && +slider.value === 0) st().on = false; // slid to zero = off
         if (def.isFx) {
           normalizeWeights(def.key);
           refreshSliders(); // the other weights visibly give way
@@ -669,6 +679,7 @@
     state.advancedOpen = !state.advancedOpen;
     syncAdvanced();
   });
+  state.advancedOpen = false; // always start collapsed, whatever was stored
   syncAdvanced();
 
   // ---- Seed as a generated Memphis badge: the seed IS the artwork. ----
@@ -752,11 +763,9 @@
   function rndAmt(pow, min) {
     return Math.max(min, Math.round(Math.pow(Math.random(), pow) * 100) / 100);
   }
-  function randomizeAll() {
-    state.sliceLength = pickOne(["1/4", "1/8", "1/16", "random"]);
-    state.loopBars = pickOne([1, 2, 4, 8]);
-    state.crossfade = pickOne(["off", "short", "medium", "long"]);
-    state.density = pickOne(["sprinkle", "seasoned", "halfway", "halfway", "hectic", "gonuts"]);
+  // RANDOMIZE only rerolls the ADVANCED EFFECTS rack: fx on/off, weights and
+  // their options. Slice length, density, space and the seed are left alone.
+  function randomizeFx() {
     FX_DEFS.forEach((def) => {
       const s = state[def.key];
       s.on = Math.random() < (def.key === "dropout" ? 0.25 : 0.45);
@@ -764,28 +773,64 @@
       if (def.opts) s[def.opts.prop] = pickOne(def.opts.choices.map((c) => c[0]));
       if (def.extraSlider) s[def.extraSlider.prop] = rndAmt(1, 0.15);
     });
-    state.autopan.on = Math.random() < 0.4;
-    state.autopan.amount = rndAmt(1, 0.2);
-    state.endfill.on = Math.random() < 0.5;
-    state.endfill.chance = rndAmt(1, 0.2);
-    state.seed = Math.floor(Math.random() * 4294967296);
     normalizeWeights(null);
   }
-  const dice = document.getElementById("newSeed");
-  dice.addEventListener("click", () => {
+  // ---- Living wallpaper: shapes seeded from the seed, count coupled to the
+  // FX density, each drifting slowly; sliders pulse it in their color. ----
+  const bgLayer = document.getElementById("bgLayer");
+  const bgPulseEl = document.getElementById("bgPulse");
+  const DENSITY_LEVEL = { sprinkle: 10, seasoned: 25, halfway: 50, hectic: 75, gonuts: 100 };
+  function renderBg() {
+    const rng = mulberry32((state.seed ^ 0x5eed) >>> 0);
+    const count = Math.round(10 + (DENSITY_LEVEL[state.density] || 25) * 0.28); // ~13..38
+    let shapes = "";
+    for (let i = 0; i < count; i++) {
+      const cx = 20 + rng() * 920;
+      const cy = 20 + rng() * 800;
+      const dur = (25 + rng() * 35).toFixed(1);
+      const dx = ((rng() - 0.5) * 44).toFixed(1);
+      const dy = ((rng() - 0.5) * 44).toFixed(1);
+      shapes += '<g opacity="0.16" style="--dur:' + dur + 's;--dx:' + dx + 'px;--dy:' + dy + 'px">' +
+        seedShape(rng, cx, cy, 34 + rng() * 46) + "</g>";
+    }
+    bgLayer.innerHTML =
+      '<svg viewBox="0 0 960 840" preserveAspectRatio="xMidYMid slice">' + shapes + "</svg>";
+  }
+  let bgPulseTimer = 0;
+  function pulseBg(color) {
+    bgPulseEl.style.background =
+      "radial-gradient(circle at 50% 40%, " + color + " 0%, transparent 65%)";
+    bgPulseEl.style.opacity = "0.14";
+    clearTimeout(bgPulseTimer);
+    bgPulseTimer = setTimeout(() => { bgPulseEl.style.opacity = "0"; }, 350);
+  }
+
+  const dice = document.getElementById("fxRandom");
+  dice.addEventListener("click", (e) => {
+    e.stopPropagation(); // must not toggle the ADVANCED collapse
     if (dice.classList.contains("rolling")) return;
     dice.classList.add("rolling");
-    // Flash random artworks while the die spins, then land on the new recipe.
+    setTimeout(() => {
+      randomizeFx();
+      refreshSliders();
+      pulseBg("#ffd600");
+      state.advancedOpen = true; // show what just changed
+      syncAdvanced();
+      favInfo.innerHTML = "🎲 EFFECTS RANDOMIZED — ♥ SAVE IF YOU LOVE IT";
+      dice.classList.remove("rolling");
+    }, 450);
+  });
+
+  // The seed badge itself rolls a fresh seed (chop order + wallpaper).
+  seedVal.style.cursor = "pointer";
+  seedVal.addEventListener("click", () => {
     const scramble = setInterval(() => drawSeed(Math.floor(Math.random() * 4294967296)), 60);
     setTimeout(() => {
       clearInterval(scramble);
-      randomizeAll();
-      syncSegments();
-      refreshSliders();
+      state.seed = Math.floor(Math.random() * 4294967296);
       drawSeed(state.seed);
-      favInfo.innerHTML = "🎲 EVERYTHING RANDOMIZED — ♥ SAVE IF YOU LOVE IT";
-      dice.classList.remove("rolling");
-    }, 450);
+      renderBg();
+    }, 350);
   });
 
   // ---- Favorites: named recipes (seed + all DSP settings). Edits live here
@@ -855,6 +900,7 @@
     normalizeWeights(null);
     refreshSliders();
     drawSeed(state.seed);
+    renderBg();
     favInfo.innerHTML = `Loaded: <b></b>`;
     favInfo.querySelector("b").textContent = fav.name;
     favOverlay.classList.remove("open");
@@ -1013,6 +1059,7 @@
 
   syncSegments();
   drawSeed(state.seed);
+  renderBg();
   applyZoom(); // measure the real content height now that every row exists
 </script>
 </body>
