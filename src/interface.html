@@ -306,11 +306,13 @@
     padding: 10px 14px; max-width: 300px;
   }
   .introNote .arr { display: block; font-size: 22px; line-height: 1; margin-bottom: 4px; }
+  .introNote.side { display: flex; align-items: center; gap: 10px; }
+  .introNote.side .arr { margin: 0; font-size: 20px; }
   .introGotIt {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    position: absolute; inset: 0; margin: auto;
+    width: max-content; height: max-content;
     font-size: 16px; padding: 16px 34px;
   }
-  .introGotIt:hover { transform: translate(-50%, -50%) translate(-1px, -1px); }
 
   /* Custom right-click menu for favorite rows. */
   #ctxMenu {
@@ -448,14 +450,14 @@
   <div class="introNote" style="left: 2.5%; top: 17%;">
     <span class="arr">↖</span>YOUR LOOP BASICS —<br>SLICE SIZE, LENGTH &amp; VARIATIONS
   </div>
-  <div class="introNote" style="right: 21%; top: 11%;">
-    <span class="arr">↗</span>THE SEED — CLICK IT FOR NEW CHOPS<br>(SAME PICTURE = SAME LOOPS)
+  <div class="introNote side" style="right: 48.5%; top: 4.5%;">
+    <span>THE SEED — CLICK IT FOR NEW CHOPS<br>(SAME PICTURE = SAME LOOPS)</span><span class="arr">→</span>
   </div>
-  <div class="introNote" style="right: 3%; top: 25%;">
-    <span class="arr">↗</span><b>ADVANCED EFFECTS</b> — CLICK OPEN TO PICK<br>WHICH EFFECTS &amp; HOW MUCH THEY'RE USED<br>(OR ROLL THE DICE TO RANDOMIZE)
+  <div class="introNote" style="right: 16%; top: 23%;">
+    <span class="arr">↑</span><b>ADVANCED EFFECTS</b> — CLICK OPEN TO PICK<br>WHICH EFFECTS &amp; HOW MUCH THEY'RE USED<br>(OR ROLL THE DICE TO RANDOMIZE)
   </div>
-  <div class="introNote" style="left: 49%; top: 74%;">
-    <span class="arr">↙</span><b>FX DENSITY</b> —<br>HOW MUCH CHANGE DO YOU WANT?
+  <div class="introNote side" style="left: 49%; top: 76%;">
+    <span class="arr">←</span><span><b>FX DENSITY</b> —<br>HOW MUCH CHANGE DO YOU WANT?</span>
   </div>
   <div class="introNote" style="left: 2.5%; bottom: 11%;">
     IF YOUR CPU IS SWEATING,<br>SWITCH THE VISUALS TO ECO<span class="arr" style="margin-top: 5px;">↙</span>
