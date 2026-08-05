@@ -291,38 +291,26 @@
     border: 2.5px solid var(--ink); border-radius: 4px; background: #fff;
   }
 
-  /* One-time welcome card (first run after install/update only). */
+  /* One-time welcome tour (first run after install/update only): yellow
+     arrow notes pointing at the real controls, GOT IT in the middle. */
   #introOverlay {
     position: fixed; inset: 0; z-index: 30; display: none;
-    background: rgba(17, 17, 17, 0.35);
-    align-items: center; justify-content: center;
+    background: rgba(17, 17, 17, 0.32);
   }
-  #introOverlay.open { display: flex; }
-  .introCard {
-    width: 460px; background: var(--paper);
-    border: 3px solid var(--ink); border-radius: 12px;
-    box-shadow: 7px 7px 0 var(--ink);
-    padding: 22px 24px 20px;
-  }
-  .introCard h2 {
-    font-family: "Arial Black", "Segoe UI", sans-serif;
-    font-size: 21px; margin-bottom: 14px;
-  }
-  .introLine {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 12px; font-weight: 600; margin-bottom: 10px;
-  }
-  .introCard .btn.primary { margin-top: 10px; text-align: center; }
-  .introEco {
-    position: absolute; left: 26px; bottom: 74px;
+  #introOverlay.open { display: block; }
+  .introNote {
+    position: absolute;
     background: var(--yellow); border: 3px solid var(--ink); border-radius: 10px;
     box-shadow: 4px 4px 0 var(--ink);
-    font-size: 11px; font-weight: 900; letter-spacing: 0.05em; line-height: 1.5;
-    padding: 10px 14px;
+    font-size: 11px; font-weight: 900; letter-spacing: 0.05em; line-height: 1.55;
+    padding: 10px 14px; max-width: 300px;
   }
-  .introEco .introArrow {
-    display: block; font-size: 22px; line-height: 1; margin-top: 4px;
+  .introNote .arr { display: block; font-size: 22px; line-height: 1; margin-bottom: 4px; }
+  .introGotIt {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font-size: 16px; padding: 16px 34px;
   }
+  .introGotIt:hover { transform: translate(-50%, -50%) translate(-1px, -1px); }
 
   /* Custom right-click menu for favorite rows. */
   #ctxMenu {
@@ -372,7 +360,7 @@
 <header>
   <div class="headText">
     <h1>LOOOPRR</h1>
-    <span class="subtitle">CREATE RANDOM LOOP</span>
+    <span class="subtitle">GET TO THE CHOPPER!</span>
   </div>
   <div class="headCtl">
     <div class="headRow">
@@ -424,7 +412,7 @@
   <div class="label"><span class="chip tri"></span>SPACE</div>
   <div id="grooveList"></div>
 
-  <div class="label"><span class="chip diamond" style="background:var(--blue)"></span>FX DENSITY — HOW MANY CHOPS GET AN EFFECT</div>
+  <div class="label"><span class="chip diamond" style="background:var(--blue)"></span>FX DENSITY — HOW MUCH CHANGE DO YOU WANT?</div>
   <div class="row five" data-group="density">
     <div class="seg" data-value="sprinkle">SPRINKLE<span class="sub">10%</span></div>
     <div class="seg" data-value="seasoned">SEASONED<span class="sub">25%</span></div>
@@ -457,16 +445,22 @@
 </div>
 
 <div id="introOverlay">
-  <div class="introCard">
-    <h2>WELCOME TO LOOOPRR! <span class="wave">🎲</span></h2>
-    <div class="introLine"><span class="chip round" style="background:#00c6ae"></span>Select audio in the Arrangement, right-click → <b>Create Random Loop…</b></div>
-    <div class="introLine"><span class="chip" style="background:#ffd600"></span><b>Click the seed artwork</b> for new chops — same shapes = same loops.</div>
-    <div class="introLine"><span class="chip diamond" style="background:#ff8c1a"></span><b>FX DENSITY</b> decides how many chops get an effect.</div>
-    <div class="introLine"><span class="chip round" style="background:#9b5de5"></span><b>ADVANCED EFFECTS</b>: pick &amp; weigh them, or hit the 🎲 in its bar.</div>
-    <div class="introLine"><span class="chip" style="background:#ff4d8d"></span><b>♥ SAVE</b> keeps your recipe — reuse it in any project via BROWSE.</div>
-    <div class="btn primary" id="introGotIt">GOT IT!</div>
+  <div class="introNote" style="left: 2.5%; top: 17%;">
+    <span class="arr">↖</span>YOUR LOOP BASICS —<br>SLICE SIZE, LENGTH &amp; VARIATIONS
   </div>
-  <div class="introEco">IF YOUR CPU IS SWEATING,<br>SWITCH THE VISUALS TO ECO<span class="introArrow">↙</span></div>
+  <div class="introNote" style="right: 21%; top: 11%;">
+    <span class="arr">↗</span>THE SEED — CLICK IT FOR NEW CHOPS<br>(SAME PICTURE = SAME LOOPS)
+  </div>
+  <div class="introNote" style="right: 3%; top: 25%;">
+    <span class="arr">↗</span><b>ADVANCED EFFECTS</b> — CLICK OPEN TO PICK<br>WHICH EFFECTS &amp; HOW MUCH THEY'RE USED<br>(OR ROLL THE DICE TO RANDOMIZE)
+  </div>
+  <div class="introNote" style="left: 49%; top: 74%;">
+    <span class="arr">↙</span><b>FX DENSITY</b> —<br>HOW MUCH CHANGE DO YOU WANT?
+  </div>
+  <div class="introNote" style="left: 2.5%; bottom: 11%;">
+    IF YOUR CPU IS SWEATING,<br>SWITCH THE VISUALS TO ECO<span class="arr" style="margin-top: 5px;">↙</span>
+  </div>
+  <div class="btn primary introGotIt" id="introGotIt">OK, GOT IT!</div>
 </div>
 
 <div id="ctxMenu">
