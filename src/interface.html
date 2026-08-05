@@ -291,6 +291,39 @@
     border: 2.5px solid var(--ink); border-radius: 4px; background: #fff;
   }
 
+  /* One-time welcome card (first run after install/update only). */
+  #introOverlay {
+    position: fixed; inset: 0; z-index: 30; display: none;
+    background: rgba(17, 17, 17, 0.35);
+    align-items: center; justify-content: center;
+  }
+  #introOverlay.open { display: flex; }
+  .introCard {
+    width: 460px; background: var(--paper);
+    border: 3px solid var(--ink); border-radius: 12px;
+    box-shadow: 7px 7px 0 var(--ink);
+    padding: 22px 24px 20px;
+  }
+  .introCard h2 {
+    font-family: "Arial Black", "Segoe UI", sans-serif;
+    font-size: 21px; margin-bottom: 14px;
+  }
+  .introLine {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; font-weight: 600; margin-bottom: 10px;
+  }
+  .introCard .btn.primary { margin-top: 10px; text-align: center; }
+  .introEco {
+    position: absolute; left: 26px; bottom: 74px;
+    background: var(--yellow); border: 3px solid var(--ink); border-radius: 10px;
+    box-shadow: 4px 4px 0 var(--ink);
+    font-size: 11px; font-weight: 900; letter-spacing: 0.05em; line-height: 1.5;
+    padding: 10px 14px;
+  }
+  .introEco .introArrow {
+    display: block; font-size: 22px; line-height: 1; margin-top: 4px;
+  }
+
   /* Custom right-click menu for favorite rows. */
   #ctxMenu {
     position: fixed; z-index: 20; display: none; min-width: 150px;
@@ -421,6 +454,19 @@
     <div class="favClose" id="favClose">×</div>
   </div>
   <div class="favRows" id="favRows"></div>
+</div>
+
+<div id="introOverlay">
+  <div class="introCard">
+    <h2>WELCOME TO LOOOPRR! <span class="wave">🎲</span></h2>
+    <div class="introLine"><span class="chip round" style="background:#00c6ae"></span>Select audio in the Arrangement, right-click → <b>Create Random Loop…</b></div>
+    <div class="introLine"><span class="chip" style="background:#ffd600"></span><b>Click the seed artwork</b> for new chops — same shapes = same loops.</div>
+    <div class="introLine"><span class="chip diamond" style="background:#ff8c1a"></span><b>FX DENSITY</b> decides how many chops get an effect.</div>
+    <div class="introLine"><span class="chip round" style="background:#9b5de5"></span><b>ADVANCED EFFECTS</b>: pick &amp; weigh them, or hit the 🎲 in its bar.</div>
+    <div class="introLine"><span class="chip" style="background:#ff4d8d"></span><b>♥ SAVE</b> keeps your recipe — reuse it in any project via BROWSE.</div>
+    <div class="btn primary" id="introGotIt">GOT IT!</div>
+  </div>
+  <div class="introEco">IF YOUR CPU IS SWEATING,<br>SWITCH THE VISUALS TO ECO<span class="introArrow">↙</span></div>
 </div>
 
 <div id="ctxMenu">
@@ -1178,6 +1224,11 @@
   document.getElementById("cancel").addEventListener("click", () =>
     closeWithResult(withFavorites(cancelResult())));
   document.addEventListener("keydown", (e) => {
+    // The welcome card swallows Enter/Escape (both just dismiss it).
+    if (introOverlay.classList.contains("open")) {
+      if (e.key === "Enter" || e.key === "Escape") introOverlay.classList.remove("open");
+      return;
+    }
     // While the favorites browser is open, Escape closes IT, Enter is inert.
     if (favOverlay.classList.contains("open")) {
       if (e.key === "Escape") favOverlay.classList.remove("open");
@@ -1186,6 +1237,13 @@
     if (e.key === "Enter") closeWithResult(withFavorites(state));
     if (e.key === "Escape") closeWithResult(withFavorites(cancelResult()));
   });
+
+  // ---- One-time welcome card (first run after install/update only). ----
+  const introOverlay = document.getElementById("introOverlay");
+  document.getElementById("introGotIt").addEventListener("click", () =>
+    introOverlay.classList.remove("open"));
+  if (state.showIntro) introOverlay.classList.add("open");
+  delete state.showIntro; // a page flag, never part of settings or recipes
 
   syncSegments();
   drawSeed(state.seed);
