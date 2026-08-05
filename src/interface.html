@@ -30,11 +30,14 @@
   }
   #bgLayer svg { width: 100%; height: 100%; }
   #bgLayer g {
-    animation: bgFloat var(--dur, 40s) ease-in-out infinite;
+    opacity: 0;
+    animation: bgSkate var(--dur, 40s) ease-in-out infinite;
   }
-  @keyframes bgFloat {
-    0%, 100% { transform: translate(0, 0); }
-    50% { transform: translate(var(--dx, 0px), var(--dy, 0px)); }
+  /* Shapes skate across the wall: fade in, glide, fade out, respawn. */
+  @keyframes bgSkate {
+    0% { opacity: 0; transform: translate(0, 0); }
+    15%, 80% { opacity: 0.16; }
+    100% { opacity: 0; transform: translate(var(--dx, 0px), var(--dy, 0px)); }
   }
   #bgPulse {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -780,17 +783,20 @@
   const bgLayer = document.getElementById("bgLayer");
   const bgPulseEl = document.getElementById("bgPulse");
   const DENSITY_LEVEL = { sprinkle: 10, seasoned: 25, halfway: 50, hectic: 75, gonuts: 100 };
+  let bgNonce = 0; // RANDOMIZE redecorates without touching the audio seed
   function renderBg() {
-    const rng = mulberry32((state.seed ^ 0x5eed) >>> 0);
+    const rng = mulberry32(((state.seed ^ bgNonce) ^ 0x5eed) >>> 0);
     const count = Math.round(10 + (DENSITY_LEVEL[state.density] || 25) * 0.28); // ~13..38
     let shapes = "";
     for (let i = 0; i < count; i++) {
       const cx = 20 + rng() * 920;
       const cy = 20 + rng() * 800;
-      const dur = (25 + rng() * 35).toFixed(1);
-      const dx = ((rng() - 0.5) * 44).toFixed(1);
-      const dy = ((rng() - 0.5) * 44).toFixed(1);
-      shapes += '<g opacity="0.16" style="--dur:' + dur + 's;--dx:' + dx + 'px;--dy:' + dy + 'px">' +
+      const dur = 20 + rng() * 28;
+      const dx = ((rng() - 0.5) * 260).toFixed(1); // long diagonal glides
+      const dy = ((rng() - 0.5) * 260).toFixed(1);
+      const delay = (-rng() * dur).toFixed(1); // desync the fade cycles
+      shapes += '<g style="--dur:' + dur.toFixed(1) + 's;--dx:' + dx + 'px;--dy:' + dy +
+        'px;animation-delay:' + delay + 's">' +
         seedShape(rng, cx, cy, 34 + rng() * 46) + "</g>";
     }
     bgLayer.innerHTML =
@@ -814,6 +820,8 @@
       randomizeFx();
       refreshSliders();
       pulseBg("#ffd600");
+      bgNonce = (Math.random() * 4294967296) >>> 0; // fresh wallpaper too
+      renderBg();
       state.advancedOpen = true; // show what just changed
       syncAdvanced();
       favInfo.innerHTML = "🎲 EFFECTS RANDOMIZED — ♥ SAVE IF YOU LOVE IT";
