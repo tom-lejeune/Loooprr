@@ -16,10 +16,7 @@
     --orange: #ff8c1a;
     --purple: #9b5de5;
     --blue: #29a8ff;
-    background:
-      radial-gradient(var(--ink) 1px, transparent 1.5px) 0 0 / 26px 26px,
-      var(--paper);
-    background-blend-mode: overlay;
+    background: var(--paper);
     color: var(--ink);
     font-family: "Segoe UI", system-ui, sans-serif;
     display: flex;
@@ -27,9 +24,23 @@
     user-select: none;
     overflow: hidden;
   }
-  body::after { /* soften the dot grid */
-    content: ""; position: fixed; inset: 0; pointer-events: none;
-    background: var(--paper); opacity: 0.82;
+  body::before { /* Memphis shapes wallpaper — soft, behind everything */
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.8;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='480' height='480'>\
+<circle cx='62' cy='70' r='26' fill='none' stroke='%2300c6ae' stroke-opacity='.30' stroke-width='5'/>\
+<circle cx='332' cy='44' r='12' fill='%23ff4d8d' fill-opacity='.24'/>\
+<path d='M22 306 l30 -36 30 36 z' fill='%23ffd600' fill-opacity='.32'/>\
+<path d='M198 148 l24 13 -24 13 24 13 -24 13' fill='none' stroke='%239b5de5' stroke-opacity='.28' stroke-width='5' stroke-linejoin='round'/>\
+<path d='M400 224 h38 M419 205 v38' stroke='%23ff8c1a' stroke-opacity='.30' stroke-width='6' stroke-linecap='round'/>\
+<circle cx='122' cy='424' r='20' fill='none' stroke='%232f9bff' stroke-opacity='.26' stroke-width='5'/>\
+<path d='M296 384 q22 -30 44 0 t44 0' fill='none' stroke='%23ff4d8d' stroke-opacity='.26' stroke-width='5' stroke-linecap='round'/>\
+<circle cx='442' cy='442' r='9' fill='%2300c6ae' fill-opacity='.28'/>\
+<path d='M60 202 l16 16 M76 202 l-16 16' stroke='%23111111' stroke-opacity='.14' stroke-width='4' stroke-linecap='round'/>\
+<circle cx='252' cy='262' r='5' fill='%23111111' fill-opacity='.12'/>\
+<path d='M368 104 l30 -18 v36 z' fill='%232fd04c' fill-opacity='.26'/>\
+<circle cx='210' cy='40' r='6' fill='%239b5de5' fill-opacity='.24'/>\
+<path d='M420 330 a16 16 0 1 1 -32 0' fill='none' stroke='%23f07ddb' stroke-opacity='.30' stroke-width='5' stroke-linecap='round'/>\
+</svg>") 0 0 / 480px 480px;
   }
   header, main, footer { position: relative; z-index: 1; }
 
@@ -83,15 +94,22 @@
   [data-group="density"] .seg[data-value="gonuts"].on { background: #d64545; color: #fff; }
 
   .advToggle {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 12px;
     background: #fff; border: 3px solid var(--ink); border-radius: 9px;
-    box-shadow: 2px 2px 0 var(--ink);
-    font-size: 11px; font-weight: 900; letter-spacing: 0.06em;
-    padding: 10px 12px; margin: 16px 0 10px; cursor: pointer;
+    box-shadow: 3px 3px 0 var(--ink);
+    font-size: 13px; font-weight: 900; letter-spacing: 0.06em;
+    padding: 15px 14px; margin: 4px 0 10px; cursor: pointer;
   }
-  .advToggle:hover { transform: translate(-1px, -1px); }
-  .advToggle .arrow { transition: transform 0.12s; display: inline-block; }
-  .advToggle.open .arrow { transform: rotate(90deg); }
+  .advToggle:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  .advChev {
+    width: 26px; height: 26px; flex: 0 0 auto; display: flex;
+    align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 900;
+    border: 3px solid var(--ink); border-radius: 7px; background: #fff;
+  }
+  .advChev .arrow { transition: transform 0.12s; display: inline-block; }
+  .advToggle.open .advChev { background: var(--yellow); }
+  .advToggle.open .advChev .arrow { transform: rotate(90deg); }
   #fxList.collapsed { display: none; }
   .seg {
     background: #fff;
@@ -354,9 +372,7 @@
 
   <div class="label"><span class="chip tri"></span>GROOVE &amp; SPACE</div>
   <div id="grooveList"></div>
-</div>
 
-<div class="col">
   <div class="label"><span class="chip diamond" style="background:var(--blue)"></span>FX DENSITY — HOW MANY CHOPS GET AN EFFECT</div>
   <div class="row five" data-group="density">
     <div class="seg" data-value="sprinkle">SPRINKLE<span class="sub">10%</span></div>
@@ -365,8 +381,10 @@
     <div class="seg" data-value="hectic">HECTIC<span class="sub">75%</span></div>
     <div class="seg" data-value="gonuts">GO NUTS<span class="sub">100%</span></div>
   </div>
+</div>
 
-  <div class="advToggle" id="advToggle"><span class="arrow">▸</span> ADVANCED — PICK &amp; WEIGH THE EFFECTS</div>
+<div class="col">
+  <div class="advToggle" id="advToggle"><span class="advChev"><span class="arrow">▸</span></span> ADVANCED — PICK &amp; WEIGH THE EFFECTS</div>
   <div id="fxList" class="collapsed"></div>
 </div>
 </main>
@@ -501,17 +519,41 @@
       hint: "ONE CLIP PER CHOP, COLORED BY ITS FX",
       tip: "Place one clip per chop, colored like these rows." },
   ];
-  // Effective percentage: the density budget divided by relative weight.
-  const DENSITY_PCT = { sprinkle: 10, seasoned: 25, halfway: 50, hectic: 75, gonuts: 100 };
-  function effectivePct(key) {
-    const s = state[key];
-    if (!s.on || !(s.weight > 0)) return 0;
-    let total = 0;
-    FX_DEFS.forEach((d) => {
-      const t = state[d.key];
-      if (t.on && t.weight > 0) total += t.weight;
-    });
-    return total > 0 ? (DENSITY_PCT[state.density] * s.weight) / total : 0;
+  // Sliders stick to the musical quarter points.
+  function snap(v) {
+    for (const d of [25, 50, 75]) if (Math.abs(v - d) <= 3) return d;
+    return v;
+  }
+
+  // The enabled FX weights always sum to 100%: push one slider up and the
+  // others visibly give way. Pure display/bookkeeping — the DSP only uses the
+  // ratios, which normalization preserves.
+  function normalizeWeights(movedKey) {
+    const onDefs = FX_DEFS.filter((d) => state[d.key].on);
+    if (!onDefs.length) return;
+    if (movedKey != null) {
+      const moved = state[movedKey];
+      const wm = Math.min(1, Math.max(0, moved.weight));
+      const others = onDefs.filter((d) => d.key !== movedKey);
+      if (!others.length) { moved.weight = 1; return; } // sole effect owns it all
+      const sumO = others.reduce((s, d) => s + state[d.key].weight, 0);
+      if (sumO <= 0) {
+        const share = (1 - wm) / others.length;
+        others.forEach((d) => { state[d.key].weight = share; });
+      } else {
+        const f = (1 - wm) / sumO;
+        others.forEach((d) => { state[d.key].weight *= f; });
+      }
+      moved.weight = wm;
+    } else {
+      const sum = onDefs.reduce((s, d) => s + state[d.key].weight, 0);
+      if (sum <= 0) {
+        const share = 1 / onDefs.length;
+        onDefs.forEach((d) => { state[d.key].weight = share; });
+      } else {
+        onDefs.forEach((d) => { state[d.key].weight /= sum; });
+      }
+    }
   }
 
   const fxSyncFns = [];
@@ -527,7 +569,7 @@
       '<div class="fxName">' + def.label + '</div>' +
       (def.toggleOnly
         ? '<div class="fxHint">' + (def.hint || "") + '</div>'
-        : '<input type="range" min="0" max="100" step="1"><div class="pct"></div>') +
+        : '<input type="range" min="0" max="100" step="1">') +
       (def.opts ? '<div class="fxChev">▾</div>' : '');
     container.appendChild(row);
 
@@ -551,16 +593,14 @@
         const sr = document.createElement("div");
         sr.className = "panelSlider";
         sr.innerHTML = '<span class="miniLabel">' + def.extraSlider.label + '</span>' +
-          '<input type="range" min="0" max="100" step="1"><div class="pct"></div>';
+          '<input type="range" min="0" max="100" step="1">';
         const sEl = sr.querySelector("input");
-        const sPct = sr.querySelector(".pct");
         sEl.addEventListener("input", () => {
+          sEl.value = snap(+sEl.value);
           st()[def.extraSlider.prop] = sEl.value / 100;
-          sPct.textContent = sEl.value + "%";
         });
         fxSyncFns.push(() => {
           sEl.value = Math.round(st()[def.extraSlider.prop] * 100);
-          sPct.textContent = sEl.value + "%";
         });
         panel.appendChild(sr);
       }
@@ -573,12 +613,17 @@
     }
 
     const slider = row.querySelector("input");
-    const pct = row.querySelector(".pct");
     if (slider) {
       slider.addEventListener("input", () => {
+        slider.value = snap(+slider.value); // sticky at 25 / 50 / 75
         st()[prop] = slider.value / 100;
         if (!def.noToggle && !st().on && slider.value > 0) st().on = true; // moving = intent
-        refreshSliders(); // weights are relative: every row's % may change
+        if (def.isFx) {
+          normalizeWeights(def.key);
+          refreshSliders(); // the other weights visibly give way
+        } else {
+          sync();
+        }
       });
     }
     if (!def.noToggle) {
@@ -586,21 +631,19 @@
         st().on = !st().on;
         // Switching on at 0 weight would be inaudible — jump to "a little bit".
         if (!def.toggleOnly && st().on && !(st()[prop] > 0)) st()[prop] = 0.3;
-        refreshSliders();
+        if (def.isFx) {
+          normalizeWeights(null);
+          refreshSliders();
+        } else {
+          sync();
+        }
       });
     }
 
     function sync() {
       const s = st();
       row.classList.toggle("on", def.noToggle ? s[prop] > 0 : !!s.on);
-      if (slider) {
-        slider.value = Math.round(s[prop] * 100);
-        // Weight rows show their EFFECTIVE share of all chops, so what you
-        // see is what you get; groove rows show their raw value.
-        pct.textContent = def.weightMode
-          ? Math.round(effectivePct(def.key)) + "%"
-          : slider.value + "%";
-      }
+      if (slider) slider.value = Math.round(s[prop] * 100);
       if (panel) {
         panel.querySelectorAll(".seg").forEach((seg) =>
           seg.classList.toggle("on", seg._val === s[def.opts.prop]));
@@ -609,9 +652,11 @@
     fxSyncFns.push(sync);
     sync();
   }
-  FX_DEFS.forEach((d) => { d.weightMode = true; buildFxRow(d, document.getElementById("fxList")); });
+  FX_DEFS.forEach((d) => { d.isFx = true; buildFxRow(d, document.getElementById("fxList")); });
   GROOVE_DEFS.forEach((d) => buildFxRow(d, document.getElementById("grooveList")));
   function refreshSliders() { fxSyncFns.forEach((f) => f()); }
+  normalizeWeights(null); // stored weights may predate the sum-to-100% display
+  refreshSliders();
 
   // ---- ADVANCED: collapse/expand the effects rack; state is persisted. ----
   const advToggle = document.getElementById("advToggle");
@@ -724,6 +769,7 @@
     state.endfill.on = Math.random() < 0.5;
     state.endfill.chance = rndAmt(1, 0.2);
     state.seed = Math.floor(Math.random() * 4294967296);
+    normalizeWeights(null);
   }
   const dice = document.getElementById("newSeed");
   dice.addEventListener("click", () => {
@@ -806,6 +852,7 @@
       if (k !== "uiScale") state[k] = copy[k];
     });
     syncSegments();
+    normalizeWeights(null);
     refreshSliders();
     drawSeed(state.seed);
     favInfo.innerHTML = `Loaded: <b></b>`;

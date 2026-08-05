@@ -34,7 +34,6 @@ audio is never touched.
   - **Dropout** — the slot stays silent (sparse, choppy grooves)
 - **Groove & space** (applied on top of everything):
   - **Auto-pan** — alternating slots pan left/right by an adjustable width
-  - **Swing** — odd slots drag behind the grid
   - **End fill** — the loop's final beat becomes an accelerating snare-roll
     fill (half the time also rising in pitch)
   - **Color clips** — instead of one clip per variation, place one clip per
@@ -52,8 +51,11 @@ audio is never touched.
 - Output: 48 kHz / 24-bit WAV, peak-normalized to −1 dBFS, imported into the
   project and placed as warped looping clips.
 
-All chance sliders use a quadratic curve, so low percentages are genuinely
-rare even on loops with many slices.
+**FX Density** governs it all: one macro (SPRINKLE 10% · SEASONED 25% ·
+HALFWAY 50% · HECTIC 75% · GO NUTS 100%) decides how many chops get an effect;
+the per-effect sliders under ADVANCED are weights that divide that budget
+(they always sum to 100% — push one up and the others give way), so the loop
+can never oversaturate.
 
 ## Requirements
 
