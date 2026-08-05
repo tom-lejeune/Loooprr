@@ -13,20 +13,45 @@ export type CrossfadeSetting = "off" | "short" | "medium" | "long";
 export type BitcrushAmount = "light" | "medium" | "hard" | "random";
 export type LoopBars = 1 | 2 | 4 | 8;
 
+/**
+ * FX density — which fraction of the chops gets an effect at all. The single
+ * budget knob: per chop ONE roll against this value decides "effect or not";
+ * the per-effect weights then only divide that budget among the enabled
+ * effects, so the total can never exceed the chosen density.
+ */
+export type FxDensity = "sprinkle" | "seasoned" | "halfway" | "hectic" | "gonuts";
+export const FX_DENSITIES: readonly FxDensity[] = [
+  "sprinkle", "seasoned", "halfway", "hectic", "gonuts",
+];
+export const DENSITY_VALUES: Record<FxDensity, number> = {
+  sprinkle: 0.1,
+  seasoned: 0.25,
+  halfway: 0.5,
+  hectic: 0.75,
+  gonuts: 1,
+};
+
 export interface ChanceFx {
   on: boolean;
-  /** 0..1 per-slice probability (quadratic curve applied in the DSP). */
-  chance: number;
+  /** Relative weight 0..1: this effect's share of the density budget. */
+  weight: number;
 }
 export interface BitcrushFx extends ChanceFx { amount: BitcrushAmount }
+/** mode: full = whole slice backwards, half = only the 2nd half reversed, pingpong = there-and-back. */
+export interface ReverseFx extends ChanceFx { mode: "full" | "half" | "pingpong" | "random" }
+/** chunk: which fraction of the slice gets repeated. */
+export interface RetriggerFx extends ChanceFx { chunk: "half" | "quarter" | "eighth" | "random" }
+/** mode: full = silent slot, half = 2nd half cut away, fade = dies out. */
+export interface DropoutFx extends ChanceFx { mode: "full" | "half" | "fade" | "random" }
 /** speed: how fast the tape brakes — fast stops mid-slice, slow rides out the whole slice. */
 export interface TapestopFx extends ChanceFx { speed: "fast" | "medium" | "slow" | "random" }
-/** gates: gates per slice; 0 = random (4 or 8). */
-export interface GaterFx extends ChanceFx { gates: 4 | 8 | 0 }
+/** gates: gates per slice (3 and 6 are triplet feels); 0 = random. */
+export interface GaterFx extends ChanceFx { gates: 2 | 3 | 4 | 6 | 8 | 0 }
 export interface RepitchFx extends ChanceFx { dir: "up" | "down" | "both" }
 export interface SweepFx extends ChanceFx { dir: "up" | "down" | "random" }
 export interface ScratchFx extends ChanceFx { mode: "scrub" | "spinback" | "random" }
-export interface FilterFx extends ChanceFx { type: "lp" | "hp" | "random" }
+/** depth: 0 = gentle mid-range sweeps, 1 = dramatic full-range sweeps. */
+export interface FilterFx extends ChanceFx { type: "lp" | "hp" | "random"; depth: number }
 /** motion: how the ringing tone moves across the slice. */
 export interface TonalDelayFx extends ChanceFx {
   motion: "static" | "rise" | "fall" | "wobble" | "random";
@@ -42,10 +67,14 @@ export interface CollageParams {
   seed: number;
   /** Dialog scale 0.5..1 — auto-fitted to the screen, user-adjustable, persisted. */
   uiScale: number;
+  /** Fraction of chops that get an effect; the weights divide this budget. */
+  density: FxDensity;
+  /** Whether the ADVANCED effects rack is expanded in the dialog. */
+  advancedOpen: boolean;
 
-  // Slice FX — at most one glitch per slice (chances compete); reverse stacks.
-  reverse: ChanceFx;
-  retrigger: ChanceFx;
+  // Slice FX — at most one per slice, drawn from the density budget by weight.
+  reverse: ReverseFx;
+  retrigger: RetriggerFx;
   sweep: SweepFx;
   tapestop: TapestopFx;
   scratch: ScratchFx;
@@ -54,11 +83,10 @@ export interface CollageParams {
   bitcrush: BitcrushFx;
   filter: FilterFx;
   tonaldelay: TonalDelayFx;
-  dropout: ChanceFx;
+  dropout: DropoutFx;
 
   // Groove & space — applied on top of everything.
   autopan: { on: boolean; amount: number };
-  swing: { on: boolean; amount: number };
   endfill: { on: boolean; chance: number };
   /** Place one clip per chop, colored by the effect that hit it. */
   colorclips: { on: boolean };
@@ -71,19 +99,20 @@ export const DEFAULT_PARAMS: CollageParams = {
   variations: 4,
   seed: 252644670,
   uiScale: 1,
-  reverse: { on: true, chance: 0.25 },
-  retrigger: { on: true, chance: 0.1 },
-  sweep: { on: false, chance: 0.2, dir: "random" },
-  tapestop: { on: true, chance: 0.1, speed: "random" },
-  scratch: { on: false, chance: 0.15, mode: "random" },
-  gater: { on: true, chance: 0.1, gates: 0 },
-  repitch: { on: true, chance: 0.1, dir: "both" },
-  bitcrush: { on: true, chance: 0.3, amount: "medium" },
-  filter: { on: false, chance: 0.25, type: "random" },
-  tonaldelay: { on: false, chance: 0.15, motion: "random" },
-  dropout: { on: false, chance: 0.15 },
+  density: "seasoned",
+  advancedOpen: false,
+  reverse: { on: true, weight: 0.5, mode: "full" },
+  retrigger: { on: true, weight: 0.5, chunk: "random" },
+  sweep: { on: false, weight: 0.5, dir: "random" },
+  tapestop: { on: true, weight: 0.3, speed: "random" },
+  scratch: { on: false, weight: 0.5, mode: "random" },
+  gater: { on: true, weight: 0.3, gates: 0 },
+  repitch: { on: true, weight: 0.5, dir: "both" },
+  bitcrush: { on: true, weight: 0.7, amount: "medium" },
+  filter: { on: false, weight: 0.5, type: "random", depth: 0.6 },
+  tonaldelay: { on: false, weight: 0.4, motion: "random" },
+  dropout: { on: false, weight: 0.3, mode: "full" },
   autopan: { on: false, amount: 0.6 },
-  swing: { on: false, amount: 0.3 },
   endfill: { on: false, chance: 0.5 },
   colorclips: { on: false },
 };
@@ -107,8 +136,8 @@ function pick<T>(v: unknown, options: readonly T[], fallback: T): T {
 }
 
 /**
- * Read a nested fx object, falling back to the legacy flat 1.x key
- * (`<legacy>Chance`): a legacy chance of 0 maps to on=false.
+ * Read a nested fx object. Migrations: a pre-2.0 nested `chance` becomes the
+ * weight; a legacy flat 1.x key (`<legacy>Chance`) maps to on + weight.
  */
 function chanceFx(
   r: Record<string, unknown>,
@@ -119,12 +148,15 @@ function chanceFx(
   const nested = r[key];
   if (nested && typeof nested === "object") {
     const n = nested as Record<string, unknown>;
-    return { on: bool(n.on, def.on), chance: clamp01(n.chance, def.chance) };
+    return {
+      on: bool(n.on, def.on),
+      weight: clamp01(n.weight ?? n.chance, def.weight),
+    };
   }
   const legacy = r[legacyKey];
   if (legacy !== undefined) {
-    const chance = clamp01(legacy, def.chance);
-    return { on: chance > 0, chance: chance > 0 ? chance : def.chance };
+    const weight = clamp01(legacy, def.weight);
+    return { on: weight > 0, weight: weight > 0 ? weight : def.weight };
   }
   return { ...def };
 }
@@ -169,7 +201,6 @@ export function sanitizeParams(raw: unknown): CollageParams {
   const legacyAmount = pick(r.bitcrushAmount, CRUSH_AMOUNTS, d.bitcrush.amount);
 
   const autopanRaw = (r.autopan ?? {}) as Record<string, unknown>;
-  const swingRaw = (r.swing ?? {}) as Record<string, unknown>;
   const endfillRaw = (r.endfill ?? {}) as Record<string, unknown>;
 
   return {
@@ -179,8 +210,18 @@ export function sanitizeParams(raw: unknown): CollageParams {
     variations,
     seed,
     uiScale,
-    reverse: chanceFx(r, "reverse", "reverseChance", d.reverse),
-    retrigger: chanceFx(r, "retrigger", "retriggerChance", d.retrigger),
+    density: pick(r.density, FX_DENSITIES, d.density),
+    advancedOpen: bool(r.advancedOpen, d.advancedOpen),
+    reverse: {
+      ...chanceFx(r, "reverse", "reverseChance", d.reverse),
+      mode: nestedOption(r, "reverse", "mode",
+        ["full", "half", "pingpong", "random"] as const, d.reverse.mode),
+    },
+    retrigger: {
+      ...chanceFx(r, "retrigger", "retriggerChance", d.retrigger),
+      chunk: nestedOption(r, "retrigger", "chunk",
+        ["half", "quarter", "eighth", "random"] as const, d.retrigger.chunk),
+    },
     sweep: {
       ...chanceFx(r, "sweep", "__none", d.sweep),
       dir: nestedOption(r, "sweep", "dir", ["up", "down", "random"] as const, d.sweep.dir),
@@ -195,7 +236,7 @@ export function sanitizeParams(raw: unknown): CollageParams {
     },
     gater: {
       ...chanceFx(r, "gater", "gaterChance", d.gater),
-      gates: nestedOption(r, "gater", "gates", [4, 8, 0] as const, d.gater.gates),
+      gates: nestedOption(r, "gater", "gates", [2, 3, 4, 6, 8, 0] as const, d.gater.gates),
     },
     repitch: {
       ...chanceFx(r, "repitch", "repitchChance", d.repitch),
@@ -208,22 +249,22 @@ export function sanitizeParams(raw: unknown): CollageParams {
     filter: {
       ...chanceFx(r, "filter", "__none", d.filter),
       type: nestedOption(r, "filter", "type", ["lp", "hp", "random"] as const, d.filter.type),
+      depth: clamp01(((r.filter ?? {}) as Record<string, unknown>).depth, d.filter.depth),
     },
     tonaldelay: {
       ...chanceFx(r, "tonaldelay", "__none", d.tonaldelay),
       motion: nestedOption(r, "tonaldelay", "motion",
         ["static", "rise", "fall", "wobble", "random"] as const, d.tonaldelay.motion),
     },
-    dropout: chanceFx(r, "dropout", "__none", d.dropout),
+    dropout: {
+      ...chanceFx(r, "dropout", "__none", d.dropout),
+      mode: nestedOption(r, "dropout", "mode",
+        ["full", "half", "fade", "random"] as const, d.dropout.mode),
+    },
     autopan: {
       on: bool(autopanRaw.on, d.autopan.on),
       amount: clamp01(autopanRaw.amount, d.autopan.amount),
     },
-    swing: (() => {
-      const amount = clamp01(swingRaw.amount, d.swing.amount);
-      // Pre-1.4.3 swing had no toggle: amount > 0 meant on.
-      return { on: bool(swingRaw.on, amount > 0 && swingRaw.amount !== undefined), amount };
-    })(),
     endfill: {
       on: bool(endfillRaw.on, d.endfill.on),
       chance: clamp01(endfillRaw.chance, d.endfill.chance),

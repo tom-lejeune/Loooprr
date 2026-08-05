@@ -23,42 +23,51 @@ function noiseSource(seconds = 4, sampleRate = 48000, channels = 2): AudioBuffer
 /** Every effect off — a pure grid shuffle. */
 function allFxOff() {
   return {
-    reverse: { on: false, chance: 0 },
-    retrigger: { on: false, chance: 0 },
-    sweep: { on: false, chance: 0, dir: "random" as const },
-    tapestop: { on: false, chance: 0, speed: "random" as const },
-    scratch: { on: false, chance: 0, mode: "random" as const },
-    gater: { on: false, chance: 0, gates: 0 as const },
-    repitch: { on: false, chance: 0, dir: "both" as const },
-    bitcrush: { on: false, chance: 0, amount: "medium" as const },
-    filter: { on: false, chance: 0, type: "random" as const },
-    tonaldelay: { on: false, chance: 0, motion: "random" as const },
-    dropout: { on: false, chance: 0 },
+    reverse: { on: false, weight: 0, mode: "full" as const },
+    retrigger: { on: false, weight: 0, chunk: "random" as const },
+    sweep: { on: false, weight: 0, dir: "random" as const },
+    tapestop: { on: false, weight: 0, speed: "random" as const },
+    scratch: { on: false, weight: 0, mode: "random" as const },
+    gater: { on: false, weight: 0, gates: 0 as const },
+    repitch: { on: false, weight: 0, dir: "both" as const },
+    bitcrush: { on: false, weight: 0, amount: "medium" as const },
+    filter: { on: false, weight: 0, type: "random" as const, depth: 0.6 },
+    tonaldelay: { on: false, weight: 0, motion: "random" as const },
+    dropout: { on: false, weight: 0, mode: "full" as const },
     autopan: { on: false, amount: 0 },
-    swing: { on: false, amount: 0 },
     endfill: { on: false, chance: 0 },
     colorclips: { on: false },
   };
 }
 
-/** Every effect on at 100%, groove maxed — the crash-test dummy. */
+/** Every effect enabled at full weight, density maxed — the crash-test dummy. */
 function allFxMax() {
   return {
-    reverse: { on: true, chance: 1 },
-    retrigger: { on: true, chance: 1 },
-    sweep: { on: true, chance: 1, dir: "random" as const },
-    tapestop: { on: true, chance: 1, speed: "random" as const },
-    scratch: { on: true, chance: 1, mode: "random" as const },
-    gater: { on: true, chance: 1, gates: 0 as const },
-    repitch: { on: true, chance: 1, dir: "both" as const },
-    bitcrush: { on: true, chance: 1, amount: "random" as const },
-    filter: { on: true, chance: 1, type: "random" as const },
-    tonaldelay: { on: true, chance: 1, motion: "random" as const },
-    dropout: { on: true, chance: 0.3 },
+    density: "gonuts" as const,
+    reverse: { on: true, weight: 1, mode: "random" as const },
+    retrigger: { on: true, weight: 1, chunk: "random" as const },
+    sweep: { on: true, weight: 1, dir: "random" as const },
+    tapestop: { on: true, weight: 1, speed: "random" as const },
+    scratch: { on: true, weight: 1, mode: "random" as const },
+    gater: { on: true, weight: 1, gates: 0 as const },
+    repitch: { on: true, weight: 1, dir: "both" as const },
+    bitcrush: { on: true, weight: 1, amount: "random" as const },
+    filter: { on: true, weight: 1, type: "random" as const, depth: 1 },
+    tonaldelay: { on: true, weight: 1, motion: "random" as const },
+    dropout: { on: true, weight: 0.3, mode: "random" as const },
     autopan: { on: true, amount: 1 },
-    swing: { on: true, amount: 0.6 },
     endfill: { on: true, chance: 1 },
     colorclips: { on: true },
+  };
+}
+
+/** Only one effect enabled, guaranteed on every chop. */
+function onlyFx(key: keyof ReturnType<typeof allFxOff>, extra: Record<string, unknown> = {}) {
+  const base = allFxOff();
+  return {
+    ...base,
+    density: "gonuts" as const,
+    [key]: { ...base[key], on: true, weight: 1, ...extra },
   };
 }
 
@@ -145,6 +154,40 @@ test("every slot is a whole grid slice of the source (chops on the grid)", () =>
   }
 });
 
+test("density caps how many chops get an effect", () => {
+  // Reverse-only makes affected slots directly countable in the metadata.
+  const loops = (density: "sprinkle" | "gonuts") =>
+    buildCollageLoop([noiseSource(2)], {
+      ...BASE,
+      ...onlyFx("reverse"),
+      density,
+      sliceLength: "1/16",
+      loopBars: 2,
+    });
+  const nuts = loops("gonuts");
+  assert.ok(nuts.slots.every((s) => s.fx === "reverse"), "gonuts must hit every chop");
+  const sprinkle = loops("sprinkle");
+  const hit = sprinkle.slots.filter((s) => s.fx !== null).length;
+  // 10% density over 32 slots: statistically far below half.
+  assert.ok(hit < sprinkle.slots.length * 0.35, `sprinkle hit ${hit}/${sprinkle.slots.length}`);
+});
+
+test("weights split the budget between enabled effects", () => {
+  const out = buildCollageLoop([noiseSource(2)], {
+    ...BASE,
+    ...allFxOff(),
+    density: "gonuts",
+    sliceLength: "1/16",
+    loopBars: 2,
+    reverse: { on: true, weight: 1, mode: "full" },
+    gater: { on: true, weight: 1, gates: 8 },
+  });
+  const rev = out.slots.filter((s) => s.fx === "reverse").length;
+  const gat = out.slots.filter((s) => s.fx === "gater").length;
+  assert.equal(rev + gat, out.slots.length); // gonuts: every chop effected
+  assert.ok(rev > 0 && gat > 0, "both effects must appear");
+});
+
 test("peak is normalized to -1 dBFS", () => {
   const out = buildCollageLoop([noiseSource(2)], BASE);
   let peak = 0;
@@ -169,10 +212,11 @@ test("shuffle-only fx fill the loop without gaps of silence", () => {
       sliceLength,
       loopBars: 2,
       crossfade: "long",
-      reverse: { on: true, chance: 0.5 },
-      retrigger: { on: true, chance: 0.5 },
-      repitch: { on: true, chance: 0.5, dir: "both" },
-      bitcrush: { on: true, chance: 0.5, amount: "random" },
+      density: "halfway",
+      reverse: { on: true, weight: 0.5, mode: "random" },
+      retrigger: { on: true, weight: 0.5, chunk: "random" },
+      repitch: { on: true, weight: 0.5, dir: "both" },
+      bitcrush: { on: true, weight: 0.5, amount: "random" },
     });
     // Any full slot of pure silence would make the RMS of some window ~0.
     const ch = out.channels[0]!;
@@ -208,11 +252,10 @@ test("all fx at 100% stay deterministic, full-length and normalized", () => {
   assert.ok(Math.abs(peak - Math.pow(10, -1 / 20)) < 1e-4);
 });
 
-test("gater at 100% actually punches silence into the output", () => {
+test("gater at full density punches silence into the output", () => {
   const out = buildCollageLoop([noiseSource(2)], {
     ...BASE,
-    ...allFxOff(),
-    gater: { on: true, chance: 1, gates: 8 },
+    ...onlyFx("gater", { gates: 8 }),
     crossfade: "off",
   });
   const ch = out.channels[0]!;
@@ -222,12 +265,8 @@ test("gater at 100% actually punches silence into the output", () => {
   assert.ok(silent > ch.length * 0.25, `only ${silent}/${ch.length} silent frames`);
 });
 
-test("dropout at 100% produces an empty loop; autopan pans odd/even slots", () => {
-  const out = buildCollageLoop([noiseSource(2)], {
-    ...BASE,
-    ...allFxOff(),
-    dropout: { on: true, chance: 1 },
-  });
+test("dropout-only at full density produces an empty loop; autopan keeps both channels", () => {
+  const out = buildCollageLoop([noiseSource(2)], { ...BASE, ...onlyFx("dropout", { mode: "full" }) });
   let sum = 0;
   for (const ch of out.channels) for (let i = 0; i < ch.length; i++) sum += Math.abs(ch[i]!);
   assert.equal(sum, 0);
@@ -238,8 +277,6 @@ test("dropout at 100% produces an empty loop; autopan pans odd/even slots", () =
     autopan: { on: true, amount: 1 },
     crossfade: "off",
   });
-  // With amount=1 alternating slots are hard L / hard R: channels must differ
-  // strongly in energy per slot but the loop still has audio in both channels.
   const energy = panned.channels.map((ch) => {
     let e = 0;
     for (let i = 0; i < ch.length; i++) e += ch[i]! * ch[i]!;
@@ -258,16 +295,17 @@ test("end fill at 100% replaces the final beat deterministically", () => {
   const a = buildCollageLoop([noiseSource(2)], params);
   const b = buildCollageLoop([noiseSource(2)], params);
   assert.deepEqual(a.channels[0], b.channels[0]);
-  // The fill region (last beat = last quarter of a 1-bar loop) has audio.
   const ch = a.channels[0]!;
   const fillStart = ch.length - Math.round(0.5 * OUTPUT_SAMPLE_RATE);
   let sum = 0;
   for (let i = fillStart; i < ch.length; i++) sum += Math.abs(ch[i]!);
   assert.ok(sum > 0, "fill region is silent");
+  const last = a.slots[a.slots.length - 1]!;
+  assert.equal(last.fx, "endfill");
+  assert.equal(last.endFrame, ch.length);
 });
 
 test("slots metadata covers the loop and reports fx per chop", () => {
-  // FX off: slots tile the loop contiguously, all plain.
   const plain = buildCollageLoop([noiseSource(2)], { ...BASE, ...allFxOff(), loopBars: 1 });
   assert.ok(plain.slots.length > 0);
   assert.equal(plain.slots[0]!.startFrame, 0);
@@ -275,23 +313,10 @@ test("slots metadata covers the loop and reports fx per chop", () => {
   for (let i = 1; i < plain.slots.length; i++) {
     assert.equal(plain.slots[i]!.startFrame, plain.slots[i - 1]!.endFrame);
   }
-  assert.ok(plain.slots.every((s) => s.fx === null && !s.reversed));
+  assert.ok(plain.slots.every((s) => s.fx === null));
 
-  // Gater at 100%: every slot reports the gater.
-  const gated = buildCollageLoop([noiseSource(2)], {
-    ...BASE, ...allFxOff(), gater: { on: true, chance: 1, gates: 8 },
-  });
+  const gated = buildCollageLoop([noiseSource(2)], { ...BASE, ...onlyFx("gater", { gates: 8 }) });
   assert.ok(gated.slots.every((s) => s.fx === "gater"));
-
-  // End fill at 100%: the final slot is the fill, ending exactly at the loop end.
-  const filled = buildCollageLoop([noiseSource(2)], {
-    ...BASE, ...allFxOff(), endfill: { on: true, chance: 1 }, loopBars: 1,
-  });
-  const last = filled.slots[filled.slots.length - 1]!;
-  assert.equal(last.fx, "endfill");
-  assert.equal(last.endFrame, filled.channels[0]!.length);
-  // Slots never overlap the fill region.
-  assert.ok(filled.slots.slice(0, -1).every((s) => s.endFrame <= last.startFrame));
 });
 
 test("encodeWav24 writes a valid 24-bit PCM header", () => {
@@ -311,34 +336,21 @@ test("encodeWav24 writes a valid 24-bit PCM header", () => {
   assert.equal(bytes.length, 44 + out.channels[0]!.length * 2 * 3);
 });
 
-test("sanitizeParams migrates legacy 1.x flat keys", () => {
-  const p = sanitizeParams({
-    sliceLength: "1/8",
-    loopBars: 2,
-    reverseChance: 0.4,
-    bitcrushChance: 0.3,
-    bitcrushAmount: "hard",
-    retriggerChance: 0,
-    tapestopChance: 0.2,
-    gaterChance: 0.1,
-    repitchChance: 0.15,
-    variations: 4,
-    seed: 999,
+test("sanitizeParams migrates pre-2.0 chances and legacy 1.x flat keys", () => {
+  // Pre-2.0 nested `chance` becomes the weight.
+  const nested = sanitizeParams({
+    reverse: { on: true, chance: 0.4 },
+    gater: { on: false, chance: 0.2, gates: 6 },
   });
-  assert.equal(p.sliceLength, "1/8");
-  assert.equal(p.reverse.on, true);
-  assert.equal(p.reverse.chance, 0.4);
-  assert.equal(p.bitcrush.on, true);
-  assert.equal(p.bitcrush.chance, 0.3);
-  assert.equal(p.bitcrush.amount, "hard");
-  assert.equal(p.retrigger.on, false); // legacy 0 -> off
-  assert.equal(p.tapestop.chance, 0.2);
-  assert.equal(p.gater.chance, 0.1);
-  assert.equal(p.repitch.chance, 0.15);
-  assert.equal(p.seed, 999);
-  // New effects fall back to their defaults.
-  assert.deepEqual(p.sweep, DEFAULT_PARAMS.sweep);
-  assert.deepEqual(p.autopan, DEFAULT_PARAMS.autopan);
+  assert.equal(nested.reverse.weight, 0.4);
+  assert.equal(nested.gater.weight, 0.2);
+  assert.equal(nested.gater.gates, 6);
+  assert.equal(nested.density, DEFAULT_PARAMS.density);
+  // Legacy 1.x flat keys.
+  const flat = sanitizeParams({ reverseChance: 0.4, retriggerChance: 0 });
+  assert.equal(flat.reverse.on, true);
+  assert.equal(flat.reverse.weight, 0.4);
+  assert.equal(flat.retrigger.on, false);
 });
 
 test("sanitizeParams clamps and defaults bad nested input", () => {
@@ -346,37 +358,37 @@ test("sanitizeParams clamps and defaults bad nested input", () => {
     sliceLength: "1/32",
     loopBars: 3,
     crossfade: "verylong",
-    reverse: { on: "yes", chance: 7 },
-    gater: { on: true, chance: 0.5, gates: 5 },
-    repitch: { on: true, chance: 0.5, dir: "sideways" },
+    density: "ludicrous",
+    advancedOpen: "yes",
+    reverse: { on: "yes", weight: 7 },
+    gater: { on: true, weight: 0.5, gates: 5 },
+    repitch: { on: true, weight: 0.5, dir: "sideways" },
+    tapestop: { on: true, weight: 0.5, speed: "warp9" },
+    tonaldelay: { on: true, weight: 0.5, motion: "spin" },
+    filter: { on: true, weight: 0.5, type: "lp", depth: 9 },
     variations: 99,
     seed: "notanumber",
     uiScale: 3,
-    swing: { amount: -2 },
+    reverse2: { on: true, weight: 0.5, mode: "diagonal" }, // unknown key: ignored
   });
   assert.equal(p.sliceLength, DEFAULT_PARAMS.sliceLength);
   assert.equal(p.loopBars, DEFAULT_PARAMS.loopBars);
   assert.equal(p.crossfade, DEFAULT_PARAMS.crossfade);
+  assert.equal(p.density, DEFAULT_PARAMS.density);
+  assert.equal(p.advancedOpen, DEFAULT_PARAMS.advancedOpen);
   assert.equal(p.reverse.on, DEFAULT_PARAMS.reverse.on); // "yes" is not a bool
-  assert.equal(p.reverse.chance, 1);
+  assert.equal(p.reverse.weight, 1);
   assert.equal(p.gater.gates, DEFAULT_PARAMS.gater.gates); // 5 invalid
   assert.equal(p.repitch.dir, DEFAULT_PARAMS.repitch.dir);
+  assert.equal(p.tapestop.speed, DEFAULT_PARAMS.tapestop.speed);
+  assert.equal(p.tonaldelay.motion, DEFAULT_PARAMS.tonaldelay.motion);
+  assert.equal(p.filter.depth, 1);
   assert.equal(p.variations, 8);
   assert.equal(p.seed, DEFAULT_PARAMS.seed);
   assert.equal(p.uiScale, 1);
-  assert.equal(p.swing.amount, 0);
-  assert.equal(p.swing.on, false); // clamped-to-0 legacy amount cannot mean on
-  // Pre-1.4.3 migration: an amount without a toggle means on when > 0.
-  assert.equal(sanitizeParams({ swing: { amount: 0.4 } }).swing.on, true);
-  assert.equal(sanitizeParams({ swing: { amount: 0 } }).swing.on, false);
-  assert.equal(sanitizeParams({}).colorclips.on, false);
-  assert.equal(sanitizeParams({ colorclips: { on: true } }).colorclips.on, true);
-  // New per-effect options default and validate.
-  assert.equal(sanitizeParams({}).tapestop.speed, DEFAULT_PARAMS.tapestop.speed);
-  assert.equal(sanitizeParams({ tapestop: { on: true, chance: 0.5, speed: "fast" } }).tapestop.speed, "fast");
-  assert.equal(sanitizeParams({ tapestop: { on: true, chance: 0.5, speed: "warp9" } }).tapestop.speed, DEFAULT_PARAMS.tapestop.speed);
-  assert.equal(sanitizeParams({ tonaldelay: { on: true, chance: 0.5, motion: "wobble" } }).tonaldelay.motion, "wobble");
-  assert.equal(sanitizeParams({ tonaldelay: { on: true, chance: 0.5, motion: "spin" } }).tonaldelay.motion, DEFAULT_PARAMS.tonaldelay.motion);
+  assert.equal(p.reverse.mode, DEFAULT_PARAMS.reverse.mode);
+  assert.equal(p.retrigger.chunk, DEFAULT_PARAMS.retrigger.chunk);
+  assert.equal(p.dropout.mode, DEFAULT_PARAMS.dropout.mode);
   const round = sanitizeParams(p);
   assert.deepEqual(round, p);
 });

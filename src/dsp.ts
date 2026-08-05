@@ -9,13 +9,13 @@
  * Slice FX (at most ONE per slot — the chances compete; reverse stacks on
  * top): retrigger, stutter sweep, tape stop, scratch/spinback, gater,
  * repitch, bitcrush, filter sweep, tonal delay, dropout.
- * Groove & space (applied on top): auto-pan, swing, end fill.
+ * Groove & space (applied on top): auto-pan, end fill.
  *
  * Everything is driven by one seeded mulberry32 RNG: same sources + params +
  * variation index -> bit-identical output.
  */
 
-import type { ChanceFx, CollageParams } from "./params.js";
+import { DENSITY_VALUES, type ChanceFx, type CollageParams } from "./params.js";
 
 export interface AudioBuffers {
   channels: Float32Array[];
@@ -72,7 +72,7 @@ export interface CollageOptions extends CollageParams {
 }
 
 export type SliceFx =
-  | "retrigger" | "sweep" | "tapestop" | "scratch" | "gater"
+  | "reverse" | "retrigger" | "sweep" | "tapestop" | "scratch" | "gater"
   | "repitch" | "bitcrush" | "filter" | "tonaldelay" | "dropout";
 
 /** What happened in one output slot — for per-chop clip placement/coloring. */
@@ -81,15 +81,12 @@ export interface SlotInfo {
   startFrame: number;
   endFrame: number;
   fx: SliceFx | "endfill" | null;
-  reversed: boolean;
 }
 
 export interface CollageResult extends AudioBuffers {
   slots: SlotInfo[];
 }
 
-/** Quadratic chance curve: keeps low percentages genuinely rare per loop. */
-const sq = (p: number) => p * p;
 
 /**
  * Assemble one collage-loop variation from the given sources.
@@ -125,11 +122,7 @@ export function buildCollageLoop(
 
     const baseStart = Math.round(posBeats * secPerBeat * OUTPUT_SAMPLE_RATE);
     const endFrame = Math.round((posBeats + sliceBeats) * secPerBeat * OUTPUT_SAMPLE_RATE);
-    // Swing: odd slots start late (up to a third of the slot), shortening them.
-    let startFrame = baseStart;
-    if (opts.swing.on && opts.swing.amount > 0 && slotIdx % 2 === 1) {
-      startFrame = baseStart + Math.floor((endFrame - baseStart) * 0.33 * opts.swing.amount);
-    }
+    const startFrame = baseStart;
     const nFrames = endFrame - startFrame;
     if (nFrames <= 1) { posBeats += sliceBeats; slotIdx++; continue; }
     const xf = Math.max(Math.min(requestedXf, Math.floor(nFrames / 2)), 0);
@@ -144,27 +137,47 @@ export function buildCollageLoop(
     const availSlices = Math.max(1, Math.min(divisions, Math.floor(srcLen / srcSliceFrames)));
     const srcStart = Math.round(Math.floor(rng() * availSlices) * srcSliceFrames);
 
-    // FX pool — chances compete, one winner per slot. Bitcrush keeps its
-    // historical linear curve; every other chance is quadratic.
-    const pool: SliceFx[] = [];
-    const rollQ = (f: ChanceFx) => f.on && rng() < sq(f.chance);
-    if (rollQ(opts.retrigger)) pool.push("retrigger");
-    if (rollQ(opts.sweep)) pool.push("sweep");
-    if (rollQ(opts.tapestop)) pool.push("tapestop");
-    if (rollQ(opts.scratch)) pool.push("scratch");
-    if (rollQ(opts.gater)) pool.push("gater");
-    if (rollQ(opts.repitch)) pool.push("repitch");
-    if (opts.bitcrush.on && rng() < opts.bitcrush.chance) pool.push("bitcrush");
-    if (rollQ(opts.filter)) pool.push("filter");
-    if (rollQ(opts.tonaldelay)) pool.push("tonaldelay");
-    if (rollQ(opts.dropout)) pool.push("dropout");
-    const fx: SliceFx | null = pool.length ? pool[Math.floor(rng() * pool.length)]! : null;
-    const reversed = opts.reverse.on && rng() < sq(opts.reverse.chance);
+    // FX budget: ONE roll against the density decides whether this chop gets
+    // an effect at all; the enabled effects' weights then divide the budget.
+    // The total effected fraction can therefore never exceed the density.
+    const enabled: { fx: SliceFx; w: number }[] = [];
+    const add = (key: SliceFx, f: ChanceFx) => {
+      if (f.on && f.weight > 0) enabled.push({ fx: key, w: f.weight });
+    };
+    add("reverse", opts.reverse);
+    add("retrigger", opts.retrigger);
+    add("sweep", opts.sweep);
+    add("tapestop", opts.tapestop);
+    add("scratch", opts.scratch);
+    add("gater", opts.gater);
+    add("repitch", opts.repitch);
+    add("bitcrush", opts.bitcrush);
+    add("filter", opts.filter);
+    add("tonaldelay", opts.tonaldelay);
+    add("dropout", opts.dropout);
+    let fx: SliceFx | null = null;
+    if (enabled.length && rng() < DENSITY_VALUES[opts.density]) {
+      const total = enabled.reduce((s, e) => s + e.w, 0);
+      let r = rng() * total;
+      for (const e of enabled) {
+        r -= e.w;
+        if (r <= 0) { fx = e.fx; break; }
+      }
+      if (!fx) fx = enabled[enabled.length - 1]!.fx;
+    }
 
-    slots.push({ startFrame, endFrame, fx, reversed });
+    slots.push({ startFrame, endFrame, fx });
+    // Dropout: how the hole is shaped. FULL skips the slot entirely; HALF and
+    // FADE still render (partially/decaying), handled in the gain stage.
+    let dropoutMode = "";
     if (fx === "dropout") {
-      // Intentional hole: the previous slice's crossfade tail decays into it.
-      posBeats += sliceBeats; slotIdx++; continue;
+      dropoutMode = opts.dropout.mode === "random"
+        ? (["full", "half", "fade"] as const)[Math.floor(rng() * 3)]!
+        : opts.dropout.mode;
+      if (dropoutMode === "full") {
+        // The previous slice's crossfade tail decays into the hole.
+        posBeats += sliceBeats; slotIdx++; continue;
+      }
     }
 
     // ---- Per-effect parameters, rolled deterministically. ----
@@ -177,9 +190,21 @@ export function buildCollageLoop(
       crush = CRUSH_CONFIGS[amount];
       levels = Math.pow(2, crush.bits - 1);
     }
-    const retrigChunk = fx === "retrigger"
-      ? Math.max(1, Math.round(nFrames / [2, 4, 8][Math.floor(rng() * 3)]!))
-      : 0;
+    let retrigChunk = 0;
+    if (fx === "retrigger") {
+      const chunk = opts.retrigger.chunk === "random"
+        ? (["half", "quarter", "eighth"] as const)[Math.floor(rng() * 3)]!
+        : opts.retrigger.chunk;
+      const div = chunk === "half" ? 2 : chunk === "quarter" ? 4 : 8;
+      retrigChunk = Math.max(1, Math.round(nFrames / div));
+    }
+    // Reverse: full flip, only the 2nd half mirrored, or there-and-back.
+    let reverseMode = "";
+    if (fx === "reverse") {
+      reverseMode = opts.reverse.mode === "random"
+        ? (["full", "half", "pingpong"] as const)[Math.floor(rng() * 3)]!
+        : opts.reverse.mode;
+    }
     // Stutter sweep: repeats on BINARY grid divisions of the slot (halves ->
     // quarters -> eighths, like a fill), so the stutter stays on the grid;
     // pitch glides up or down across the repeats.
@@ -199,7 +224,9 @@ export function buildCollageLoop(
     }
     let gatePeriod = 0, gateEdge = 0;
     if (fx === "gater") {
-      const gates = opts.gater.gates || (rng() < 0.5 ? 4 : 8);
+      // 3 and 6 give triplet feels; 2 keeps it slow enough for high tempos.
+      const gates = opts.gater.gates ||
+        ([2, 3, 4, 6, 8] as const)[Math.floor(rng() * 5)]!;
       gatePeriod = Math.max(2, Math.floor(nFrames / gates));
       gateEdge = Math.min(64, gatePeriod * 0.1);
     }
@@ -220,8 +247,13 @@ export function buildCollageLoop(
     let filterLp = true, filterF0 = 0, filterF1 = 0;
     if (fx === "filter") {
       filterLp = opts.filter.type === "random" ? rng() < 0.5 : opts.filter.type === "lp";
-      filterF0 = 250 * Math.pow(2, rng() * 4); // 250 Hz .. 4 kHz
-      filterF1 = 250 * Math.pow(2, rng() * 4);
+      // Depth widens the cutoff playground: gentle mid-range sweeps at 0,
+      // dramatic 120 Hz .. 9 kHz dives at 1.
+      const depth = opts.filter.depth;
+      const minHz = 800 - 680 * depth; // 800 -> 120
+      const maxHz = 3000 + 6000 * depth; // 3000 -> 9000
+      filterF0 = minHz * Math.pow(maxHz / minHz, rng());
+      filterF1 = minHz * Math.pow(maxHz / minHz, rng());
     }
     // Tonal delay: a pitched comb tuned to a note between ~110 and ~440 Hz.
     // "Motion" glides the delay length across the slice, bending the tone:
@@ -298,8 +330,19 @@ export function buildCollageLoop(
         } else {
           u = kRead;
         }
-        // Reverse flips within the slot (reads past either end are clamped).
-        if (reversed) u = nFrames - 1 - u;
+        // Reverse (reads past either end are clamped):
+        // full = whole slot backwards; half = only the 2nd half mirrored;
+        // pingpong = forward to the midpoint, then rewind to the start.
+        if (fx === "reverse") {
+          const h = nFrames >> 1;
+          if (reverseMode === "half") {
+            u = u < h ? u : nFrames - 1 - (u - h);
+          } else if (reverseMode === "pingpong") {
+            u = u < h ? u : Math.max(0, 2 * h - u);
+          } else {
+            u = nFrames - 1 - u;
+          }
+        }
 
         const srcPos = srcStart + u * ratio;
         const i0 = Math.max(0, Math.min(Math.floor(srcPos), srcLen - 2));
@@ -342,6 +385,17 @@ export function buildCollageLoop(
         // the neighbouring slots when crossfading).
         let gain = panGain;
         if (fx === "tapestop" && kRead >= tapestopT) gain = 0; // tape stands still
+        if (fx === "dropout") {
+          if (dropoutMode === "half") {
+            // Second half cut away, with a short declick ramp at the cut.
+            const h = nFrames >> 1;
+            if (k >= h) gain = 0;
+            else if (h - k < 32) gain *= (h - k) / 32;
+          } else {
+            // fade: dies out over the slot.
+            gain *= Math.pow(Math.max(0, 1 - k / nFrames), 1.5);
+          }
+        }
         if (k < fadeLen) gain *= Math.sin(((k + 1) / fadeLen) * (Math.PI / 2));
         const fromEnd = extFrames - k;
         if (fromEnd <= fadeLen) gain *= Math.sin((fromEnd / fadeLen) * (Math.PI / 2));
@@ -376,7 +430,7 @@ export function buildCollageLoop(
       if (s.startFrame >= fillStart) slots.splice(i, 1);
       else if (s.endFrame > fillStart) s.endFrame = fillStart;
     }
-    slots.push({ startFrame: fillStart, endFrame: totalFrames, fx: "endfill", reversed: false });
+    slots.push({ startFrame: fillStart, endFrame: totalFrames, fx: "endfill" });
   }
 
   // Peak-normalize to -1 dBFS.

@@ -175,6 +175,7 @@ const FX_CLIP_COLORS: Record<string, number> = {
   bitcrush: 0xd64545,
   filter: 0xa3e635,
   tonaldelay: 0xf07ddb,
+  dropout: 0x8a8f98,
   endfill: 0xff3355,
 };
 const FX_CLIP_TAGS: Record<string, string> = {
@@ -189,12 +190,12 @@ const FX_CLIP_TAGS: Record<string, string> = {
   bitcrush: "CRU",
   filter: "FLT",
   tonaldelay: "DLY",
+  dropout: "DRP",
   endfill: "FILL",
 };
 
 function slotFxKey(slot: SlotInfo): string {
-  if (slot.fx) return slot.fx;
-  return slot.reversed ? "reverse" : "plain";
+  return slot.fx ?? "plain";
 }
 
 async function loadFavorites(context: Ctx): Promise<Favorite[]> {
@@ -318,8 +319,10 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
           variationIndex: v,
         });
         if (params.colorclips.on) {
+          // Dropout slots get gray clips too — half/fade dropouts carry audio,
+          // and a gray block reads clearer than a mystery gap.
           const plans: ClipPlan[] = [];
-          const clipSlots = loop.slots.filter((s) => s.fx !== "dropout");
+          const clipSlots = loop.slots;
           for (let i = 0; i < clipSlots.length; i++) {
             if (signal.aborted) return;
             const s = clipSlots[i]!;

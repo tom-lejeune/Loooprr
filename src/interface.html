@@ -73,6 +73,26 @@
 
   .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 11px; }
   .row.eight { grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .row.five { grid-template-columns: repeat(5, 1fr); gap: 9px; }
+  .row.five .seg { font-size: 11px; padding: 8px 0 6px; }
+  .seg .sub { display: block; font-size: 9px; font-weight: 700; opacity: 0.55; margin-top: 2px; }
+  [data-group="density"] .seg[data-value="sprinkle"].on { background: #00c6ae; }
+  [data-group="density"] .seg[data-value="seasoned"].on { background: #ffd600; }
+  [data-group="density"] .seg[data-value="halfway"].on { background: #ff8c1a; }
+  [data-group="density"] .seg[data-value="hectic"].on { background: #ff4d8d; color: #fff; }
+  [data-group="density"] .seg[data-value="gonuts"].on { background: #d64545; color: #fff; }
+
+  .advToggle {
+    display: flex; align-items: center; gap: 8px;
+    background: #fff; border: 3px solid var(--ink); border-radius: 9px;
+    box-shadow: 2px 2px 0 var(--ink);
+    font-size: 11px; font-weight: 900; letter-spacing: 0.06em;
+    padding: 10px 12px; margin: 16px 0 10px; cursor: pointer;
+  }
+  .advToggle:hover { transform: translate(-1px, -1px); }
+  .advToggle .arrow { transition: transform 0.12s; display: inline-block; }
+  .advToggle.open .arrow { transform: rotate(90deg); }
+  #fxList.collapsed { display: none; }
   .seg {
     background: #fff;
     border: 3px solid var(--ink);
@@ -150,6 +170,8 @@
   .fxPanel .row { gap: 8px; }
   .fxPanel .seg { padding: 8px 0; font-size: 11px; }
   .fxPanel .seg.on { background: var(--acc, var(--yellow)); }
+  .panelSlider { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .panelSlider .miniLabel { font-size: 9px; font-weight: 900; letter-spacing: 0.06em; width: 44px; }
 
   .seedVal {
     width: 220px; display: flex; align-items: center; justify-content: center;
@@ -335,8 +357,17 @@
 </div>
 
 <div class="col">
-  <div class="label"><span class="chip diamond" style="background:var(--blue)"></span>SLICE FX — ONE PER CHOP, CHANCES COMPETE</div>
-  <div id="fxList"></div>
+  <div class="label"><span class="chip diamond" style="background:var(--blue)"></span>FX DENSITY — HOW MANY CHOPS GET AN EFFECT</div>
+  <div class="row five" data-group="density">
+    <div class="seg" data-value="sprinkle">SPRINKLE<span class="sub">10%</span></div>
+    <div class="seg" data-value="seasoned">SEASONED<span class="sub">25%</span></div>
+    <div class="seg" data-value="halfway">HALFWAY<span class="sub">50%</span></div>
+    <div class="seg" data-value="hectic">HECTIC<span class="sub">75%</span></div>
+    <div class="seg" data-value="gonuts">GO NUTS<span class="sub">100%</span></div>
+  </div>
+
+  <div class="advToggle" id="advToggle"><span class="arrow">▸</span> ADVANCED — PICK &amp; WEIGH THE EFFECTS</div>
+  <div id="fxList" class="collapsed"></div>
 </div>
 </main>
 
@@ -372,10 +403,16 @@
   let naturalH = 0;
   function applyZoom() {
     if (!naturalH) {
+      // Measure with the ADVANCED rack expanded, so opening it later never
+      // pushes the dialog past the window.
+      const fxl = document.getElementById("fxList");
+      const wasCollapsed = fxl.classList.contains("collapsed");
+      fxl.classList.remove("collapsed");
       const h = document.querySelector("header");
       const m = document.querySelector("main");
       const f = document.querySelector("footer");
       naturalH = h.offsetHeight + m.scrollHeight + f.offsetHeight + 4;
+      if (wasCollapsed) fxl.classList.add("collapsed");
     }
     document.body.style.zoom = Math.min(
       window.innerWidth / BASE_W,
@@ -421,9 +458,11 @@
   // COLOR CLIPS mode, so UI and Arrangement speak the same language.
   const FX_DEFS = [
     { key: "reverse",    label: "REVERSE",       acc: "#2f9bff",
-      tip: "Slice plays backwards. Stacks on top of any other effect." },
+      tip: "Slice plays backwards: fully, only the 2nd half, or there-and-back.",
+      opts: { prop: "mode", choices: [["full", "FULL"], ["half", "HALF"], ["pingpong", "PINGPONG"], ["random", "RND"]] } },
     { key: "retrigger",  label: "RETRIGGER",     acc: "#ff4d8d",
-      tip: "Stutter: repeats the first 1/2, 1/4 or 1/8 of the slice." },
+      tip: "Stutter: repeats the slice's first chunk.",
+      opts: { prop: "chunk", choices: [["half", "1/2"], ["quarter", "1/4"], ["eighth", "1/8"], ["random", "RND"]] } },
     { key: "sweep",      label: "STUTTER SWEEP", acc: "#9b5de5",
       tip: "Grid-locked repeats that speed up while gliding in pitch.",
       opts: { prop: "dir", choices: [["up", "PITCH UP"], ["down", "PITCH DOWN"], ["random", "RND"]] } },
@@ -434,8 +473,8 @@
       tip: "Vinyl scrub (back & forth) or spinback (accelerating rewind).",
       opts: { prop: "mode", choices: [["scrub", "SCRUB"], ["spinback", "SPINBACK"], ["random", "RND"]] } },
     { key: "gater",      label: "GATER",         acc: "#ffd600",
-      tip: "Rhythmic on/off gate inside the slice (50% duty).",
-      opts: { prop: "gates", choices: [[4, "4 GATES"], [8, "8 GATES"], [0, "RND"]] } },
+      tip: "Rhythmic on/off gate inside the slice (50% duty); 3/6 = triplet feel.",
+      opts: { prop: "gates", choices: [[2, "2"], [3, "3ᵀ"], [4, "4"], [6, "6ᵀ"], [8, "8"], [0, "RND"]] } },
     { key: "repitch",    label: "REPITCH",       acc: "#2fd04c",
       tip: "Varispeed: octave up (plays twice) or octave down (half heard).",
       opts: { prop: "dir", choices: [["up", "OCT UP"], ["down", "OCT DOWN"], ["both", "BOTH"]] } },
@@ -444,28 +483,41 @@
       opts: { prop: "amount", choices: [["light", "LIGHT"], ["medium", "MED"], ["hard", "HARD"], ["random", "RND"]] } },
     { key: "filter",     label: "FILTER SWEEP",  acc: "#a3e635",
       tip: "Low- or high-pass whose cutoff glides across the slice.",
-      opts: { prop: "type", choices: [["lp", "LOW-PASS"], ["hp", "HIGH-PASS"], ["random", "RND"]] } },
+      opts: { prop: "type", choices: [["lp", "LOW-PASS"], ["hp", "HIGH-PASS"], ["random", "RND"]] },
+      extraSlider: { prop: "depth", label: "DEPTH" } },
     { key: "tonaldelay", label: "TONAL DELAY",   acc: "#f07ddb",
       tip: "Pitched comb delay ringing at a random note; motion bends the tone.",
       opts: { prop: "motion", choices: [["static", "STATIC"], ["rise", "RISE"], ["fall", "FALL"], ["wobble", "WOBBLE"], ["random", "RND"]] } },
     { key: "dropout",    label: "DROPOUT",       acc: "#8a8f98",
-      tip: "The slot stays silent — sparse, choppy grooves." },
+      tip: "Punches holes: full silence, 2nd half cut away, or a fade-out.",
+      opts: { prop: "mode", choices: [["full", "FULL"], ["half", "HALF"], ["fade", "FADE"], ["random", "RND"]] } },
   ];
   const GROOVE_DEFS = [
     { key: "autopan", label: "AUTO-PAN", acc: "#22d3ee", prop: "amount",
       tip: "Alternating slots pan left/right by this width." },
-    { key: "swing",   label: "SWING",    acc: "#c47f2e", prop: "amount",
-      tip: "Odd slots drag behind the grid." },
     { key: "endfill", label: "END FILL", acc: "#ff3355", prop: "chance",
       tip: "The loop's final beat becomes an accelerating roll." },
     { key: "colorclips", label: "COLOR CLIPS", acc: "#6366f1", toggleOnly: true,
       hint: "ONE CLIP PER CHOP, COLORED BY ITS FX",
       tip: "Place one clip per chop, colored like these rows." },
   ];
+  // Effective percentage: the density budget divided by relative weight.
+  const DENSITY_PCT = { sprinkle: 10, seasoned: 25, halfway: 50, hectic: 75, gonuts: 100 };
+  function effectivePct(key) {
+    const s = state[key];
+    if (!s.on || !(s.weight > 0)) return 0;
+    let total = 0;
+    FX_DEFS.forEach((d) => {
+      const t = state[d.key];
+      if (t.on && t.weight > 0) total += t.weight;
+    });
+    return total > 0 ? (DENSITY_PCT[state.density] * s.weight) / total : 0;
+  }
+
   const fxSyncFns = [];
   function buildFxRow(def, container) {
     const st = () => state[def.key];
-    const prop = def.prop || "chance";
+    const prop = def.prop || "weight";
     const row = document.createElement("div");
     row.className = "fxRow";
     row.style.setProperty("--acc", def.acc);
@@ -495,6 +547,23 @@
         seg.addEventListener("click", () => { st()[def.opts.prop] = val; sync(); });
         r.appendChild(seg);
       });
+      if (def.extraSlider) {
+        const sr = document.createElement("div");
+        sr.className = "panelSlider";
+        sr.innerHTML = '<span class="miniLabel">' + def.extraSlider.label + '</span>' +
+          '<input type="range" min="0" max="100" step="1"><div class="pct"></div>';
+        const sEl = sr.querySelector("input");
+        const sPct = sr.querySelector(".pct");
+        sEl.addEventListener("input", () => {
+          st()[def.extraSlider.prop] = sEl.value / 100;
+          sPct.textContent = sEl.value + "%";
+        });
+        fxSyncFns.push(() => {
+          sEl.value = Math.round(st()[def.extraSlider.prop] * 100);
+          sPct.textContent = sEl.value + "%";
+        });
+        panel.appendChild(sr);
+      }
       panel.appendChild(r);
       container.appendChild(panel);
       row.querySelector(".fxChev").addEventListener("click", () => {
@@ -509,15 +578,15 @@
       slider.addEventListener("input", () => {
         st()[prop] = slider.value / 100;
         if (!def.noToggle && !st().on && slider.value > 0) st().on = true; // moving = intent
-        sync();
+        refreshSliders(); // weights are relative: every row's % may change
       });
     }
     if (!def.noToggle) {
       row.querySelector(".fxTog").addEventListener("click", () => {
         st().on = !st().on;
-        // Switching on at 0% would be inaudible — jump to "a little bit".
+        // Switching on at 0 weight would be inaudible — jump to "a little bit".
         if (!def.toggleOnly && st().on && !(st()[prop] > 0)) st()[prop] = 0.3;
-        sync();
+        refreshSliders();
       });
     }
 
@@ -526,7 +595,11 @@
       row.classList.toggle("on", def.noToggle ? s[prop] > 0 : !!s.on);
       if (slider) {
         slider.value = Math.round(s[prop] * 100);
-        pct.textContent = slider.value + "%";
+        // Weight rows show their EFFECTIVE share of all chops, so what you
+        // see is what you get; groove rows show their raw value.
+        pct.textContent = def.weightMode
+          ? Math.round(effectivePct(def.key)) + "%"
+          : slider.value + "%";
       }
       if (panel) {
         panel.querySelectorAll(".seg").forEach((seg) =>
@@ -536,9 +609,22 @@
     fxSyncFns.push(sync);
     sync();
   }
-  FX_DEFS.forEach((d) => buildFxRow(d, document.getElementById("fxList")));
+  FX_DEFS.forEach((d) => { d.weightMode = true; buildFxRow(d, document.getElementById("fxList")); });
   GROOVE_DEFS.forEach((d) => buildFxRow(d, document.getElementById("grooveList")));
   function refreshSliders() { fxSyncFns.forEach((f) => f()); }
+
+  // ---- ADVANCED: collapse/expand the effects rack; state is persisted. ----
+  const advToggle = document.getElementById("advToggle");
+  const fxListEl = document.getElementById("fxList");
+  function syncAdvanced() {
+    advToggle.classList.toggle("open", !!state.advancedOpen);
+    fxListEl.classList.toggle("collapsed", !state.advancedOpen);
+  }
+  advToggle.addEventListener("click", () => {
+    state.advancedOpen = !state.advancedOpen;
+    syncAdvanced();
+  });
+  syncAdvanced();
 
   // ---- Seed as a generated Memphis badge: the seed IS the artwork. ----
   // Same mulberry32 as the DSP, so the drawing is a faithful visual hash.
@@ -625,16 +711,16 @@
     state.sliceLength = pickOne(["1/4", "1/8", "1/16", "random"]);
     state.loopBars = pickOne([1, 2, 4, 8]);
     state.crossfade = pickOne(["off", "short", "medium", "long"]);
+    state.density = pickOne(["sprinkle", "seasoned", "halfway", "halfway", "hectic", "gonuts"]);
     FX_DEFS.forEach((def) => {
       const s = state[def.key];
       s.on = Math.random() < (def.key === "dropout" ? 0.25 : 0.45);
-      s.chance = rndAmt(1.3, 0.05);
+      s.weight = rndAmt(1, 0.1);
       if (def.opts) s[def.opts.prop] = pickOne(def.opts.choices.map((c) => c[0]));
+      if (def.extraSlider) s[def.extraSlider.prop] = rndAmt(1, 0.15);
     });
     state.autopan.on = Math.random() < 0.4;
     state.autopan.amount = rndAmt(1, 0.2);
-    state.swing.on = Math.random() < 0.4;
-    state.swing.amount = rndAmt(1.5, 0.15);
     state.endfill.on = Math.random() < 0.5;
     state.endfill.chance = rndAmt(1, 0.2);
     state.seed = Math.floor(Math.random() * 4294967296);
