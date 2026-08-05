@@ -28,16 +28,16 @@
   #bgLayer {
     position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
   }
-  #bgLayer svg { width: 100%; height: 100%; }
-  #bgLayer g {
-    opacity: 0;
-    animation: bgSkate var(--dur, 40s) ease-in-out infinite;
+  /* The wall is STILL until touched: sliders nudge the whole image like a
+     microscope slide, RANDOMIZE bumps the table so every shape jolts. */
+  #bgLayer svg {
+    width: 100%; height: 100%;
+    transition: transform 0.55s cubic-bezier(0.3, 0, 0.2, 1);
+    will-change: transform;
   }
-  /* Shapes skate across the wall: fade in, glide, fade out, respawn. */
-  @keyframes bgSkate {
-    0% { opacity: 0; transform: translate(0, 0); }
-    15%, 80% { opacity: 0.16; }
-    100% { opacity: 0; transform: translate(var(--dx, 0px), var(--dy, 0px)); }
+  #bgLayer g {
+    opacity: 0.16;
+    transition: transform 0.6s cubic-bezier(0.3, 0, 0.2, 1);
   }
   #bgPulse {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -607,7 +607,11 @@
         const sEl = sr.querySelector("input");
         sEl.addEventListener("input", () => {
           sEl.value = snap(+sEl.value);
-          st()[def.extraSlider.prop] = sEl.value / 100;
+          const v = +sEl.value;
+          const prev = sEl._prev ?? v;
+          sEl._prev = v;
+          nudgeBg(clampPx((v - prev) * 1.2, 35), (Math.random() - 0.5) * 10);
+          st()[def.extraSlider.prop] = v / 100;
           pulseBg(def.acc);
         });
         fxSyncFns.push(() => {
@@ -627,10 +631,15 @@
     if (slider) {
       slider.addEventListener("input", () => {
         slider.value = snap(+slider.value); // sticky at 25 / 50 / 75
-        st()[prop] = slider.value / 100;
+        const v = +slider.value;
+        const prev = slider._prev ?? v;
+        slider._prev = v;
+        // Microscope nudge: the wall drifts with your slider movement.
+        nudgeBg(clampPx((v - prev) * 1.2, 35), (Math.random() - 0.5) * 10);
+        st()[prop] = v / 100;
         pulseBg(def.acc); // wallpaper glows in this effect's color
-        if (!def.noToggle && !st().on && slider.value > 0) st().on = true; // moving = intent
-        if (!def.noToggle && +slider.value === 0) st().on = false; // slid to zero = off
+        if (!def.noToggle && !st().on && v > 0) st().on = true; // moving = intent
+        if (!def.noToggle && v === 0) st().on = false; // slid to zero = off
         if (def.isFx) {
           normalizeWeights(def.key);
           refreshSliders(); // the other weights visibly give way
@@ -656,7 +665,10 @@
     function sync() {
       const s = st();
       row.classList.toggle("on", def.noToggle ? s[prop] > 0 : !!s.on);
-      if (slider) slider.value = Math.round(s[prop] * 100);
+      if (slider) {
+        slider.value = Math.round(s[prop] * 100);
+        slider._prev = +slider.value; // programmatic moves must not nudge the wall
+      }
       if (panel) {
         panel.querySelectorAll(".seg").forEach((seg) =>
           seg.classList.toggle("on", seg._val === s[def.opts.prop]));
@@ -783,24 +795,39 @@
   const bgLayer = document.getElementById("bgLayer");
   const bgPulseEl = document.getElementById("bgPulse");
   const DENSITY_LEVEL = { sprinkle: 10, seasoned: 25, halfway: 50, hectic: 75, gonuts: 100 };
-  let bgNonce = 0; // RANDOMIZE redecorates without touching the audio seed
+  let bgSvg = null;
+  let bgShapes = []; // per-shape persistent offsets for table bumps
+  let bgView = { x: 0, y: 0 }; // whole-image offset for slider nudges
+  const clampPx = (v, m) => Math.max(-m, Math.min(m, v));
   function renderBg() {
-    const rng = mulberry32(((state.seed ^ bgNonce) ^ 0x5eed) >>> 0);
+    const rng = mulberry32((state.seed ^ 0x5eed) >>> 0);
     const count = Math.round(10 + (DENSITY_LEVEL[state.density] || 25) * 0.28); // ~13..38
     let shapes = "";
     for (let i = 0; i < count; i++) {
       const cx = 20 + rng() * 920;
       const cy = 20 + rng() * 800;
-      const dur = 20 + rng() * 28;
-      const dx = ((rng() - 0.5) * 260).toFixed(1); // long diagonal glides
-      const dy = ((rng() - 0.5) * 260).toFixed(1);
-      const delay = (-rng() * dur).toFixed(1); // desync the fade cycles
-      shapes += '<g style="--dur:' + dur.toFixed(1) + 's;--dx:' + dx + 'px;--dy:' + dy +
-        'px;animation-delay:' + delay + 's">' +
-        seedShape(rng, cx, cy, 34 + rng() * 46) + "</g>";
+      shapes += "<g>" + seedShape(rng, cx, cy, 34 + rng() * 46) + "</g>";
     }
     bgLayer.innerHTML =
       '<svg viewBox="0 0 960 840" preserveAspectRatio="xMidYMid slice">' + shapes + "</svg>";
+    bgSvg = bgLayer.querySelector("svg");
+    bgView = { x: 0, y: 0 };
+    bgShapes = [...bgLayer.querySelectorAll("g")].map((el) => ({ el, x: 0, y: 0 }));
+  }
+  /** Microscope-slide nudge: the whole image drifts a touch and stays there. */
+  function nudgeBg(dx, dy) {
+    if (!bgSvg) return;
+    bgView.x = clampPx(bgView.x + dx, 60);
+    bgView.y = clampPx(bgView.y + dy, 60);
+    bgSvg.style.transform = "translate(" + bgView.x + "px," + bgView.y + "px)";
+  }
+  /** Table bump: every shape jolts in its own direction and settles there. */
+  function bumpBg() {
+    bgShapes.forEach((s) => {
+      s.x = clampPx(s.x + (Math.random() - 0.5) * 80, 70);
+      s.y = clampPx(s.y + (Math.random() - 0.5) * 80, 70);
+      s.el.style.transform = "translate(" + s.x.toFixed(1) + "px," + s.y.toFixed(1) + "px)";
+    });
   }
   let bgPulseTimer = 0;
   function pulseBg(color) {
@@ -820,8 +847,7 @@
       randomizeFx();
       refreshSliders();
       pulseBg("#ffd600");
-      bgNonce = (Math.random() * 4294967296) >>> 0; // fresh wallpaper too
-      renderBg();
+      bumpBg(); // someone thumped the table — everything shuffles a bit
       state.advancedOpen = true; // show what just changed
       syncAdvanced();
       favInfo.innerHTML = "🎲 EFFECTS RANDOMIZED — ♥ SAVE IF YOU LOVE IT";
