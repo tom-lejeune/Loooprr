@@ -285,28 +285,6 @@
     border: 2.5px solid var(--ink); border-radius: 4px; background: #fff;
   }
 
-  /* One-time welcome tour (first run after install/update only): yellow
-     arrow notes pointing at the real controls, GOT IT in the middle. */
-  #introOverlay {
-    position: fixed; inset: 0; z-index: 30; display: none;
-    background: rgba(17, 17, 17, 0.32);
-  }
-  #introOverlay.open { display: block; }
-  .introNote {
-    position: absolute;
-    background: var(--yellow); border: 3px solid var(--ink); border-radius: 10px;
-    box-shadow: 4px 4px 0 var(--ink);
-    font-size: 11px; font-weight: 900; letter-spacing: 0.05em; line-height: 1.55;
-    padding: 10px 14px; max-width: 300px;
-  }
-  .introNote .arr { display: block; font-size: 22px; line-height: 1; margin-bottom: 4px; }
-  .introNote.side { display: flex; align-items: center; gap: 10px; }
-  .introNote.side .arr { margin: 0; font-size: 20px; }
-  .introGotIt {
-    position: absolute; inset: 0; margin: auto;
-    width: max-content; height: max-content;
-    font-size: 16px; padding: 16px 34px;
-  }
 
   /* Custom right-click menu for favorite rows. */
   #ctxMenu {
@@ -334,12 +312,19 @@
     padding: 14px 22px 20px;
   }
   .footLeft { flex: 1; display: flex; align-items: center; }
+  /* Real button styling; FULL = filled, ECO = white with feather-thin text. */
   .ecoTog {
-    font-size: 9px; font-weight: 900; letter-spacing: 0.08em; color: #777;
-    border: 2px solid #999; border-radius: 6px; padding: 5px 10px; cursor: pointer;
+    font-size: 11px; font-weight: 900; letter-spacing: 0.08em; color: var(--ink);
+    background: var(--teal);
+    border: 3px solid var(--ink); border-radius: 9px;
+    box-shadow: 3px 3px 0 var(--ink);
+    padding: 10px 16px; cursor: pointer;
   }
-  .ecoTog:hover { color: var(--ink); border-color: var(--ink); }
-  body.eco .ecoTog { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .ecoTog:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  body.eco .ecoTog {
+    background: #fff; color: var(--ink);
+    font-weight: 200; letter-spacing: 0.14em;
+  }
   .btn {
     border: 3px solid var(--ink); border-radius: 10px;
     box-shadow: 3px 3px 0 var(--ink);
@@ -437,22 +422,6 @@
     <div class="favClose" id="favClose">×</div>
   </div>
   <div class="favRows" id="favRows"></div>
-</div>
-
-<div id="introOverlay">
-  <div class="introNote" style="left: 2.5%; top: 17%;">
-    <span class="arr">↖</span>YOUR LOOP BASICS —<br>SLICE SIZE, LENGTH &amp; VARIATIONS
-  </div>
-  <div class="introNote" style="right: 16%; top: 23%;">
-    <span class="arr">↑</span><b>ADVANCED EFFECTS</b> — CLICK OPEN TO PICK<br>WHICH EFFECTS &amp; HOW MUCH THEY'RE USED<br>(OR ROLL THE DICE TO RANDOMIZE)
-  </div>
-  <div class="introNote side" style="left: 49%; top: 76%;">
-    <span class="arr">←</span><span><b>FX DENSITY</b> —<br>HOW MUCH CHANGE DO YOU WANT?</span>
-  </div>
-  <div class="introNote" style="left: 2.5%; bottom: 11%;">
-    IF YOUR CPU IS SWEATING,<br>SWITCH THE VISUALS TO ECO<span class="arr" style="margin-top: 5px;">↙</span>
-  </div>
-  <div class="btn primary introGotIt" id="introGotIt">OK, GOT IT!</div>
 </div>
 
 <div id="ctxMenu">
@@ -1196,11 +1165,6 @@
   document.getElementById("cancel").addEventListener("click", () =>
     closeWithResult(withFavorites(cancelResult())));
   document.addEventListener("keydown", (e) => {
-    // The welcome card swallows Enter/Escape (both just dismiss it).
-    if (introOverlay.classList.contains("open")) {
-      if (e.key === "Enter" || e.key === "Escape") introOverlay.classList.remove("open");
-      return;
-    }
     // While the favorites browser is open, Escape closes IT, Enter is inert.
     if (favOverlay.classList.contains("open")) {
       if (e.key === "Escape") favOverlay.classList.remove("open");
@@ -1209,13 +1173,6 @@
     if (e.key === "Enter") closeWithResult(withFavorites(state));
     if (e.key === "Escape") closeWithResult(withFavorites(cancelResult()));
   });
-
-  // ---- One-time welcome card (first run after install/update only). ----
-  const introOverlay = document.getElementById("introOverlay");
-  document.getElementById("introGotIt").addEventListener("click", () =>
-    introOverlay.classList.remove("open"));
-  if (state.showIntro) introOverlay.classList.add("open");
-  delete state.showIntro; // a page flag, never part of settings or recipes
 
   syncSegments();
   renderBg();

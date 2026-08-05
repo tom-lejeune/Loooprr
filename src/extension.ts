@@ -159,30 +159,6 @@ async function saveParams(context: Ctx, params: CollageParams): Promise<void> {
 
 const FAVORITES_FILE = "favorites.json";
 
-// The bundle is CJS, so __dirname exists at runtime (the installed dist dir).
-declare const __dirname: string;
-
-/**
- * First-run detection via a marker file in the extension's OWN install
- * directory: reinstalling (or updating) replaces that directory, so the
- * welcome card reappears exactly then — and never otherwise.
- */
-async function checkFirstRun(): Promise<boolean> {
-  const marker = path.join(__dirname, "intro-shown");
-  try {
-    await fs.access(marker);
-    return false;
-  } catch {
-    // Not shown yet. Mark immediately so a killed session still counts.
-    try {
-      await fs.writeFile(marker, "shown");
-    } catch (e) {
-      console.warn("Loooprr: could not write intro marker:", e);
-    }
-    return true;
-  }
-}
-
 /**
  * Clip colors per effect for COLOR CLIPS mode — the extension's accent
  * palette (Live may snap them to its own nearest palette entries).
@@ -278,9 +254,8 @@ async function runCollage(context: Ctx, selection: ArrangementSelection): Promis
   const current = await loadParams(context);
   const favorites = await loadFavorites(context);
   const fitScale = await measureFitScale(context);
-  const showIntro = await checkFirstRun();
   const html = interfaceHtml
-    .replace("__PARAMS__", JSON.stringify({ ...current, showIntro }))
+    .replace("__PARAMS__", JSON.stringify(current))
     .replace("__FAVORITES__", JSON.stringify(favorites));
   const result = await context.ui.showModalDialog(
     `data:text/html,${encodeURIComponent(html)}`,
