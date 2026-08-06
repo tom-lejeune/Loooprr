@@ -38,10 +38,11 @@ Every chop can get **one** effect, drawn from the rack:
 
 **FX DENSITY** is the one knob that rules them all — *how much change do you
 want?* From **SPRINKLE** (10% of chops) to **GO NUTS** (every single one).
-The effect weights under **ADVANCED EFFECTS** simply divide that budget
+The weight sliders in the **EFFECTS** rack simply divide that budget
 (they always sum to 100% — push one up and the others give way), so a loop
 can mathematically never oversaturate. Feeling lucky? The 🎲 **RANDOMIZE**
-rerolls the whole rack.
+rerolls the whole rack. Want none of it? Flip the EFFECTS master switch
+off and Loooprr is a **pure chopper** — just slicing and rearranging.
 
 On top: **AUTO-PAN** (alternating chops left/right), **END FILL** (the last
 beat becomes an accelerating snare-roll), and **COLOR CLIPS** — place one
@@ -86,17 +87,20 @@ npm test           # offline DSP unit tests (no Live needed)
 npm run package    # type-check + bundle + .ablx
 ```
 
-The DSP is pure, dependency-free TypeScript — deterministic (seeded RNG),
-fully unit-tested offline, output rendered as 48 kHz / 24-bit WAV.
+The DSP is pure, dependency-free TypeScript — fully deterministic (a saved
+recipe always renders the same loops), unit-tested offline, output rendered
+as 48 kHz / 24-bit WAV.
 
 ## Nice touches
 
-- The dialog sizes itself to your screen, whatever it is.
-- The Memphis wallpaper is alive: parallax layers with depth-of-field blur
-  that nudge when you slide, jolt when you toggle, and sigh when you switch
-  an effect off. CPU sweating? Hit **VISUALS: ECO**.
-- Every real adjustment quietly deals a fresh shuffle; reopening the dialog
-  keeps your last recipe, so the loop you just made can be saved as-is.
+- Every adjustment quietly deals a fresh shuffle, so each tweak is a
+  genuinely new roll — while reopening the dialog keeps your last recipe,
+  so the loop you just made can be reopened and ♥ saved exactly as it
+  sounded.
+- The chops never touch your source audio: results land on a new track,
+  and one undo removes everything.
+- The dialog sizes itself to your screen. Weak machine? **VISUALS: ECO**
+  switches off the interface eye-candy.
 
 ## License
 
