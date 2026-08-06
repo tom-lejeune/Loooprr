@@ -156,7 +156,7 @@ export function buildCollageLoop(
     add("tonaldelay", opts.tonaldelay);
     add("dropout", opts.dropout);
     let fx: SliceFx | null = null;
-    if (enabled.length && rng() < DENSITY_VALUES[opts.density]) {
+    if (opts.fxOn && enabled.length && rng() < DENSITY_VALUES[opts.density]) {
       const total = enabled.reduce((s, e) => s + e.w, 0);
       let r = rng() * total;
       for (const e of enabled) {

@@ -23,6 +23,7 @@ function noiseSource(seconds = 4, sampleRate = 48000, channels = 2): AudioBuffer
 /** Every effect off — a pure grid shuffle. */
 function allFxOff() {
   return {
+    fxOn: true,
     reverse: { on: false, weight: 0, mode: "full" as const },
     retrigger: { on: false, weight: 0, chunk: "random" as const },
     sweep: { on: false, weight: 0, dir: "random" as const },
@@ -43,6 +44,7 @@ function allFxOff() {
 /** Every effect enabled at full weight, density maxed — the crash-test dummy. */
 function allFxMax() {
   return {
+    fxOn: true,
     density: "gonuts" as const,
     reverse: { on: true, weight: 1, mode: "random" as const },
     retrigger: { on: true, weight: 1, chunk: "random" as const },
@@ -62,7 +64,7 @@ function allFxMax() {
 }
 
 /** Only one effect enabled, guaranteed on every chop. */
-function onlyFx(key: keyof ReturnType<typeof allFxOff>, extra: Record<string, unknown> = {}) {
+function onlyFx(key: Exclude<keyof ReturnType<typeof allFxOff>, "fxOn">, extra: Record<string, unknown> = {}) {
   const base = allFxOff();
   return {
     ...base,
@@ -186,6 +188,19 @@ test("weights split the budget between enabled effects", () => {
   const gat = out.slots.filter((s) => s.fx === "gater").length;
   assert.equal(rev + gat, out.slots.length); // gonuts: every chop effected
   assert.ok(rev > 0 && gat > 0, "both effects must appear");
+});
+
+test("master fxOn=false makes a pure chopper: everything enabled, no fx land", () => {
+  const out = buildCollageLoop([noiseSource(2)], {
+    ...BASE,
+    ...allFxMax(),
+    fxOn: false,
+  });
+  assert.ok(out.slots.length > 0);
+  // End fill is SPACE, not a slice fx — with endfill on it may still appear.
+  assert.ok(out.slots.every((s) => s.fx === null || s.fx === "endfill"));
+  assert.equal(sanitizeParams({}).fxOn, true);
+  assert.equal(sanitizeParams({ fxOn: false }).fxOn, false);
 });
 
 test("peak is normalized to -1 dBFS", () => {

@@ -67,6 +67,8 @@ export interface CollageParams {
   seed: number;
   /** Dialog scale 0.5..1 — auto-fitted to the screen, user-adjustable, persisted. */
   uiScale: number;
+  /** Master switch: off = a pure chopper, no slice effects at all. */
+  fxOn: boolean;
   /** Fraction of chops that get an effect; the weights divide this budget. */
   density: FxDensity;
   /** Whether the ADVANCED effects rack is expanded in the dialog. */
@@ -101,6 +103,7 @@ export const DEFAULT_PARAMS: CollageParams = {
   variations: 4,
   seed: 252644670,
   uiScale: 1,
+  fxOn: true,
   density: "seasoned",
   advancedOpen: false,
   eco: false,
@@ -213,6 +216,7 @@ export function sanitizeParams(raw: unknown): CollageParams {
     variations,
     seed,
     uiScale,
+    fxOn: bool(r.fxOn, d.fxOn),
     density: pick(r.density, FX_DENSITIES, d.density),
     advancedOpen: bool(r.advancedOpen, d.advancedOpen),
     eco: bool(r.eco, d.eco),

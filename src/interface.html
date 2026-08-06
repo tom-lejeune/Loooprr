@@ -107,21 +107,17 @@
     background: #fff; border: 3px solid var(--ink); border-radius: 9px;
     box-shadow: 3px 3px 0 var(--ink);
     font-size: 13px; font-weight: 900; letter-spacing: 0.06em;
-    padding: 15px 14px; margin: 4px 0 10px; cursor: pointer;
+    padding: 13px 14px; margin: 4px 0 10px;
   }
-  .advToggle:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
-  .advChev {
-    width: 26px; height: 26px; flex: 0 0 auto; display: flex;
-    align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 900;
-    border: 3px solid var(--ink); border-radius: 7px; background: #fff;
-  }
-  .advChev .arrow { transition: transform 0.12s; display: inline-block; }
-  .advToggle.open .advChev { background: var(--yellow); }
-  .advToggle.open .advChev .arrow { transform: rotate(90deg); }
+  .advToggle .fxTog { cursor: pointer; }
+  .advToggle.on .fxTog { background: var(--teal); }
+  .advToggle.on .fxTog::after { left: 19px; }
   .advSpacer { flex: 1; }
   .advToggle .dice { font-size: 15px; padding: 5px 12px; box-shadow: 2px 2px 0 var(--ink); }
-  #fxList.collapsed { display: none; }
+  /* Master off: the rack and density dim out — it's a pure chopper now. */
+  body.fxoff #fxList, body.fxoff .advToggle .dice,
+  body.fxoff [data-group="density"],
+  body.fxoff .label:has(+ [data-group="density"]) { opacity: 0.4; pointer-events: none; }
   .seg {
     background: #fff;
     border: 3px solid var(--ink);
@@ -403,13 +399,13 @@
 </div>
 
 <div class="col">
-  <div class="advToggle" id="advToggle">
-    <span class="advChev"><span class="arrow">▸</span></span>
-    <span>ADVANCED EFFECTS</span>
+  <div class="advToggle" id="fxMasterBar">
+    <div class="fxTog" id="fxMasterTog" title="Effects on/off — off = a pure chopper"></div>
+    <span>EFFECTS</span>
     <span class="advSpacer"></span>
     <div class="dice" id="fxRandom" title="Randomize the effects below (nothing else)"><span class="die">🎲</span><span class="txt">RANDOMIZE</span></div>
   </div>
-  <div id="fxList" class="collapsed"></div>
+  <div id="fxList"></div>
 </div>
 </main>
 
@@ -447,16 +443,10 @@
   let naturalH = 0;
   function applyZoom() {
     if (!naturalH) {
-      // Measure with the ADVANCED rack expanded, so opening it later never
-      // pushes the dialog past the window.
-      const fxl = document.getElementById("fxList");
-      const wasCollapsed = fxl.classList.contains("collapsed");
-      fxl.classList.remove("collapsed");
       const h = document.querySelector("header");
       const m = document.querySelector("main");
       const f = document.querySelector("footer");
       naturalH = h.offsetHeight + m.scrollHeight + f.offsetHeight + 4;
-      if (wasCollapsed) fxl.classList.add("collapsed");
     }
     document.body.style.zoom = Math.min(
       window.innerWidth / BASE_W,
@@ -720,19 +710,20 @@
   normalizeWeights(null); // stored weights may predate the sum-to-100% display
   refreshSliders();
 
-  // ---- ADVANCED: collapse/expand the effects rack; state is persisted. ----
-  const advToggle = document.getElementById("advToggle");
-  const fxListEl = document.getElementById("fxList");
-  function syncAdvanced() {
-    advToggle.classList.toggle("open", !!state.advancedOpen);
-    fxListEl.classList.toggle("collapsed", !state.advancedOpen);
+  // ---- EFFECTS master switch: off = a pure chopper, no slice fx at all. ----
+  const fxMasterBar = document.getElementById("fxMasterBar");
+  function syncFxMaster() {
+    fxMasterBar.classList.toggle("on", !!state.fxOn);
+    document.body.classList.toggle("fxoff", !state.fxOn);
   }
-  advToggle.addEventListener("click", () => {
-    state.advancedOpen = !state.advancedOpen;
-    syncAdvanced();
+  document.getElementById("fxMasterTog").addEventListener("click", () => {
+    state.fxOn = !state.fxOn;
+    rerollSeed();
+    if (state.fxOn) { joltBg(); pulseBg("#00c6ae", 0.3); }
+    else sighBg();
+    syncFxMaster();
   });
-  state.advancedOpen = false; // always start collapsed, whatever was stored
-  syncAdvanced();
+  syncFxMaster();
 
   // ---- ECO visuals: kills blur, motion and glow for low-power machines. ----
   const ecoTog = document.getElementById("ecoTog");
@@ -940,8 +931,6 @@
       refreshSliders();
       pulseBg("#ffd600", 0.3);
       bumpBg(); // someone thumped the table — everything shuffles a bit
-      state.advancedOpen = true; // show what just changed
-      syncAdvanced();
       favInfo.innerHTML = "🎲 EFFECTS RANDOMIZED — ♥ SAVE IF YOU LOVE IT";
       dice.classList.remove("rolling");
     }, 450);
