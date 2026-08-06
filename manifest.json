@@ -1,7 +1,7 @@
 {
     "name": "Loooprr",
-    "author": "Tom",
+    "author": "Paul Petrol",
     "entry": "dist/extension.js",
-    "version": "2.5.1",
+    "version": "1.0.1",
     "minimumApiVersion": "1.0.0"
 }
